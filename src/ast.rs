@@ -28,18 +28,14 @@ impl OmlValue {
         }
     }
 
-    pub fn as_key(&self) -> Result<Vec<String>, String> {
-        if let Self::String(s) = self {
-            // TODO
-            panic!();
-            Ok(vec![])
-        } else {
-            Err("".to_string())
-        }
-    }
-
     pub fn apply(&mut self, val: OmlValue) {
-        // TODO
+        if let OmlValue::Map(self_m) = self {
+            if let OmlValue::Map(m) = val {
+                for (key, value) in m {
+                    self_m.insert(key, value);
+                }
+            }
+        }
     }
 
     fn parse_oml(root: pest::iterators::Pair<'_, Rule>) -> Result<OmlValue, String> {
@@ -57,7 +53,9 @@ impl OmlValue {
         Ok(ret)
     }
 
-    fn parse_block(root: pest::iterators::Pair<'_, Rule>) -> Result<OmlValue, String> {
+    fn parse_block(
+        root: pest::iterators::Pair<'_, Rule>,
+    ) -> Result<(Vec<String>, bool, OmlValue), String> {
         let mut head = vec![];
         let mut is_array_head = false;
         let mut ret = HashMap::new();
@@ -68,28 +66,36 @@ impl OmlValue {
                     head = Self::parse_ids(root_item);
                     is_array_head = true;
                 }
-                Rule::assign_pair => (), //TODO
+                Rule::assign_pair => {
+                    let (mut keys, mut value) = Self::parse_pair(root_item);
+                    while keys.len() > 1 {
+                        let mut tmp_map = HashMap::new();
+                        tmp_map.insert(keys.remove(keys.len() - 1), value);
+                        value = OmlValue::Map(tmp_map);
+                    }
+                    ret.insert(keys.remove(0), value);
+                }
                 _ => unreachable!(),
             }
         }
-        Ok(Self::Map(ret))
+        Ok((head, is_array_head, OmlValue::Map(ret)))
     }
 
-    fn parse_pair(root: pest::iterators::Pair<'_, Rule>) -> Result<(String, OmlValue), String> {
-        let mut key = vec![];
+    fn parse_pair(root: pest::iterators::Pair<'_, Rule>) -> (Vec<String>, OmlValue) {
+        let mut keys = vec![];
         let mut value = OmlValue::new_map();
         for root_item in root.into_inner() {
             match root_item.as_rule() {
-                Rule::string_literal => key = Self::parse_literal(root_item)?.as_key()?,
-                Rule::ids => key = Self::parse_ids(root_item),
-                Rule::expr => value = Self::parse_expr(root_item)?,
+                Rule::ids => keys = Self::parse_ids(root_item),
+                Rule::expr => value = Self::parse_expr(root_item),
+                _ => unreachable!(),
             }
         }
-        Ok((key, value))
+        (keys, value)
     }
 
-    fn parse_expr(root: pest::iterators::Pair<'_, Rule>) -> Result<OmlValue, String> {
-        //
+    fn parse_expr(root: pest::iterators::Pair<'_, Rule>) -> OmlValue {
+        todo!()
     }
 
     fn parse_ids(root: pest::iterators::Pair<'_, Rule>) -> Vec<String> {
@@ -105,6 +111,6 @@ impl OmlValue {
     }
 
     fn parse_literal(root: pest::iterators::Pair<'_, Rule>) -> Result<OmlValue, String> {
-        //
+        todo!()
     }
 }

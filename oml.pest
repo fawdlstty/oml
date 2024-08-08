@@ -20,8 +20,8 @@ map_expr        = { "{" ~ (map_assign_pair ~ ("," ~ map_assign_pair)*)* ~ "}" }
 op2_expr        = { base_expr ~ op2 ~ expr }
 op3_expr        = { base_expr ~ "?" ~ expr ~ ":" ~ expr }
 expr            = { base_expr | array_expr | map_expr | op2_expr | op3_expr }
-assign_pair     = { (string_literal | ids) ~ "=" ~ expr }
-map_assign_pair = { (string_literal | ids) ~ ":" ~ expr }
+assign_pair     = { ids ~ "=" ~ expr }
+map_assign_pair = { ids ~ ":" ~ expr }
 
 group_head       = { "[" ~ ids ~ "]" }
 group_array_head = { "[[" ~ ids ~ "]]" }
