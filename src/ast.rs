@@ -2,6 +2,8 @@ use pest::Parser;
 use pest_derive::Parser;
 use std::collections::HashMap;
 
+use crate::string_utils::IntoBaseExt;
+
 #[derive(Parser)]
 #[grammar = "../oml.pest"]
 pub struct OmlParser;
@@ -15,9 +17,28 @@ pub enum OmlValue {
     String(String),
     Array(Vec<OmlValue>),
     Map(HashMap<String, OmlValue>),
+    TempName(String),
+    Op2((Box<OmlValue>, String, Box<OmlValue>)),
+    Op3((Box<OmlValue>, Box<OmlValue>, Box<OmlValue>)),
+    FormatString((Vec<String>, Vec<OmlValue>)),
 }
 
 impl OmlValue {
+    pub fn new() -> Self {
+        Self::None
+    }
+
+    pub fn new_map() -> Self {
+        Self::Map(HashMap::new())
+    }
+
+    pub fn from_str(content: &str) -> Result<OmlValue, String> {
+        match OmlParser::parse(Rule::oml, content) {
+            Ok(mut root) => Self::parse_oml(root.next().unwrap()),
+            Err(err) => Err(err.to_string()),
+        }
+    }
+
     pub fn apply(&mut self, val: OmlValue) {
         match self {
             OmlValue::Array(arr) => arr.push(val),
@@ -37,67 +58,8 @@ impl OmlValue {
             _ => *self = val,
         }
     }
-}
 
-#[derive(Debug, Clone)]
-pub enum OmlExpr {
-    None,
-    Value(OmlValue),
-    TempName(String),
-    Op2((Box<OmlExpr>, String, Box<OmlExpr>)),
-    Op3((Box<OmlExpr>, Box<OmlExpr>, Box<OmlExpr>)),
-}
-
-impl OmlExpr {
-    pub fn new() -> Self {
-        Self::None
-    }
-
-    pub fn from_str(content: &str) -> Result<OmlExpr, String> {
-        match OmlParser::parse(Rule::oml, content) {
-            Ok(mut root) => Self::parse_oml(root.next().unwrap()),
-            Err(err) => Err(err.to_string()),
-        }
-    }
-
-    pub fn eval(&self, mut path: Vec<String>) -> OmlValue {
-        match self {
-            OmlExpr::None => OmlValue::None,
-            OmlExpr::Value(val) => val.clone(),
-            OmlExpr::TempName(name) => {
-                let names: Vec<_> = name.split('.').map(|s| s.to_string()).collect();
-                for name in names {
-                    if name == "super" {
-                        //
-                    }
-                }
-            }
-            OmlExpr::Op2(_) => todo!(),
-            OmlExpr::Op3(_) => todo!(),
-        }
-    }
-
-    pub fn apply(&mut self, val: OmlExpr) {
-        // match self {
-        //     OmlValue::Array(arr) => arr.push(val),
-        //     OmlValue::Map(map) => {
-        //         if let OmlValue::Map(map2) = val {
-        //             for (key, val) in map2.into_iter() {
-        //                 if let Some(self_k) = map.get_mut(&key) {
-        //                     self_k.apply(val);
-        //                 } else {
-        //                     map.insert(key, val);
-        //                 }
-        //             }
-        //         } else {
-        //             *self = val;
-        //         }
-        //     }
-        //     _ => *self = val,
-        // }
-    }
-
-    fn parse_oml(root: pest::iterators::Pair<'_, Rule>) -> Result<OmlExpr, String> {
+    fn parse_oml(root: pest::iterators::Pair<'_, Rule>) -> Result<OmlValue, String> {
         let mut ret = Self::new_map();
         for root_item in root.into_inner() {
             match root_item.as_rule() {
@@ -112,7 +74,7 @@ impl OmlExpr {
         Ok(ret)
     }
 
-    fn parse_block(root: pest::iterators::Pair<'_, Rule>) -> Result<OmlExpr, String> {
+    fn parse_block(root: pest::iterators::Pair<'_, Rule>) -> Result<OmlValue, String> {
         let mut head = "".to_string();
         let mut is_array_head = false;
         let mut ret = HashMap::new();
@@ -148,7 +110,7 @@ impl OmlExpr {
         Ok(ret)
     }
 
-    fn parse_pair(root: pest::iterators::Pair<'_, Rule>) -> (String, OmlExpr) {
+    fn parse_pair(root: pest::iterators::Pair<'_, Rule>) -> (String, OmlValue) {
         let mut keys = "".to_string();
         let mut value = OmlValue::new_map();
         for root_item in root.into_inner() {
@@ -161,7 +123,7 @@ impl OmlExpr {
         (keys, value)
     }
 
-    fn parse_expr(root: pest::iterators::Pair<'_, Rule>) -> OmlExpr {
+    fn parse_expr(root: pest::iterators::Pair<'_, Rule>) -> OmlValue {
         let root_item = root.into_inner().next().unwrap();
         match root_item.as_rule() {
             Rule::base_expr => Self::parse_base_expr(root_item),
@@ -173,7 +135,7 @@ impl OmlExpr {
         }
     }
 
-    fn parse_base_expr(root: pest::iterators::Pair<'_, Rule>) -> OmlExpr {
+    fn parse_base_expr(root: pest::iterators::Pair<'_, Rule>) -> OmlValue {
         let root_item = root.into_inner().next().unwrap();
         match root_item.as_rule() {
             Rule::literal => Self::parse_literal(root_item),
@@ -183,7 +145,7 @@ impl OmlExpr {
         }
     }
 
-    fn parse_array_expr(root: pest::iterators::Pair<'_, Rule>) -> OmlExpr {
+    fn parse_array_expr(root: pest::iterators::Pair<'_, Rule>) -> OmlValue {
         let mut exprs = vec![];
         for root_item in root.into_inner() {
             match root_item.as_rule() {
@@ -194,7 +156,7 @@ impl OmlExpr {
         OmlValue::Array(exprs)
     }
 
-    fn parse_map_expr(root: pest::iterators::Pair<'_, Rule>) -> OmlExpr {
+    fn parse_map_expr(root: pest::iterators::Pair<'_, Rule>) -> OmlValue {
         let mut map = HashMap::new();
         for root_item in root.into_inner() {
             match root_item.as_rule() {
@@ -208,24 +170,61 @@ impl OmlExpr {
         OmlValue::Map(map)
     }
 
-    fn parse_op2_expr(root: pest::iterators::Pair<'_, Rule>) -> OmlExpr {
+    fn parse_op2_expr(root: pest::iterators::Pair<'_, Rule>) -> OmlValue {
         let mut expr1 = OmlValue::new_map();
         let mut op = "".to_string();
         let mut expr2 = OmlValue::new_map();
         for root_item in root.into_inner() {
             match root_item.as_rule() {
                 Rule::base_expr => expr1 = Self::parse_base_expr(root_item),
+                Rule::op2 => op = root_item.as_str().to_string(),
+                Rule::expr => expr2 = Self::parse_expr(root_item),
                 _ => unreachable!(),
             }
         }
+        OmlValue::Op2((Box::new(expr1), op, Box::new(expr2)))
     }
 
-    fn parse_op3_expr(root: pest::iterators::Pair<'_, Rule>) -> OmlExpr {
-        //
+    fn parse_op3_expr(root: pest::iterators::Pair<'_, Rule>) -> OmlValue {
+        let mut expr1 = OmlValue::new_map();
+        let mut expr2 = OmlValue::new_map();
+        let mut expr3 = OmlValue::new_map();
+        for root_item in root.into_inner() {
+            match root_item.as_rule() {
+                Rule::base_expr => expr1 = Self::parse_base_expr(root_item),
+                Rule::expr => expr2 = Self::parse_expr(root_item),
+                Rule::expr1 => expr3 = Self::parse_expr(root_item.into_inner().next().unwrap()),
+                _ => unreachable!(),
+            }
+        }
+        OmlValue::Op3((Box::new(expr1), Box::new(expr2), Box::new(expr3)))
     }
 
-    fn parse_literal(root: pest::iterators::Pair<'_, Rule>) -> OmlExpr {
-        //
+    fn parse_literal(root: pest::iterators::Pair<'_, Rule>) -> OmlValue {
+        let root_item = root.into_inner().next().unwrap();
+        match root_item.as_rule() {
+            Rule::boolean_literal => OmlValue::Bool(root_item.as_str() == "true"),
+            Rule::number_literal => OmlValue::Int64(root_item.as_str().parse().unwrap_or(0)),
+            Rule::string_literal => OmlValue::String(root_item.as_str().into_base()),
+            Rule::format_string_literal => Self::parse_format_string_literal(root_item),
+            _ => unreachable!(),
+        }
+    }
+
+    fn parse_format_string_literal(root: pest::iterators::Pair<'_, Rule>) -> OmlValue {
+        let mut strs = vec![];
+        let mut exprs = vec![];
+        for root_item in root.into_inner() {
+            match root_item.as_rule() {
+                Rule::format_string => return OmlValue::String(root_item.as_str().into_base()),
+                Rule::format_string_part1 => strs.push(root_item.as_str().into_base()),
+                Rule::format_string_part2 => strs.push(root_item.as_str().into_base()),
+                Rule::format_string_part3 => strs.push(root_item.as_str().into_base()),
+                Rule::expr => exprs.push(Self::parse_expr(root_item)),
+                _ => unreachable!(),
+            }
+        }
+        OmlValue::FormatString((strs, exprs))
     }
 
     fn parse_ids(root: pest::iterators::Pair<'_, Rule>) -> String {
