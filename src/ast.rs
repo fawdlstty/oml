@@ -1,6 +1,7 @@
 use pest::Parser;
 use pest_derive::Parser;
 use std::collections::HashMap;
+use std::ops::{Index, IndexMut};
 
 use crate::string_utils::IntoBaseExt;
 
@@ -17,21 +18,13 @@ pub enum OmlValue {
     String(String),
     Array(Vec<OmlValue>),
     Map(HashMap<String, OmlValue>),
-    TempName(String),
+    //TempName(String),
     Op2((Box<OmlValue>, String, Box<OmlValue>)),
     Op3((Box<OmlValue>, Box<OmlValue>, Box<OmlValue>)),
     FormatString((Vec<String>, Vec<OmlValue>)),
 }
 
 impl OmlValue {
-    pub fn new() -> Self {
-        Self::None
-    }
-
-    pub fn new_map() -> Self {
-        Self::Map(HashMap::new())
-    }
-
     pub fn from_str(content: &str) -> Result<OmlValue, String> {
         match OmlParser::parse(Rule::oml, content) {
             Ok(mut root) => Self::parse_oml(root.next().unwrap()),
@@ -39,7 +32,7 @@ impl OmlValue {
         }
     }
 
-    pub fn apply(&mut self, val: OmlValue) {
+    fn apply(&mut self, val: OmlValue) {
         match self {
             OmlValue::Array(arr) => arr.push(val),
             OmlValue::Map(map) => {
@@ -60,7 +53,7 @@ impl OmlValue {
     }
 
     fn parse_oml(root: pest::iterators::Pair<'_, Rule>) -> Result<OmlValue, String> {
-        let mut ret = Self::new_map();
+        let mut ret = Self::None;
         for root_item in root.into_inner() {
             match root_item.as_rule() {
                 Rule::group_block => {
@@ -112,7 +105,7 @@ impl OmlValue {
 
     fn parse_pair(root: pest::iterators::Pair<'_, Rule>) -> (String, OmlValue) {
         let mut keys = "".to_string();
-        let mut value = OmlValue::new_map();
+        let mut value = OmlValue::None;
         for root_item in root.into_inner() {
             match root_item.as_rule() {
                 Rule::ids => keys = Self::parse_ids(root_item),
@@ -161,7 +154,7 @@ impl OmlValue {
         for root_item in root.into_inner() {
             match root_item.as_rule() {
                 Rule::map_assign_pair => {
-                    let (key, mut value) = Self::parse_pair(root_item);
+                    let (key, value) = Self::parse_pair(root_item);
                     map.insert(key, value);
                 }
                 _ => unreachable!(),
@@ -171,9 +164,9 @@ impl OmlValue {
     }
 
     fn parse_op2_expr(root: pest::iterators::Pair<'_, Rule>) -> OmlValue {
-        let mut expr1 = OmlValue::new_map();
+        let mut expr1 = OmlValue::None;
         let mut op = "".to_string();
-        let mut expr2 = OmlValue::new_map();
+        let mut expr2 = OmlValue::None;
         for root_item in root.into_inner() {
             match root_item.as_rule() {
                 Rule::base_expr => expr1 = Self::parse_base_expr(root_item),
@@ -186,9 +179,9 @@ impl OmlValue {
     }
 
     fn parse_op3_expr(root: pest::iterators::Pair<'_, Rule>) -> OmlValue {
-        let mut expr1 = OmlValue::new_map();
-        let mut expr2 = OmlValue::new_map();
-        let mut expr3 = OmlValue::new_map();
+        let mut expr1 = OmlValue::None;
+        let mut expr2 = OmlValue::None;
+        let mut expr3 = OmlValue::None;
         for root_item in root.into_inner() {
             match root_item.as_rule() {
                 Rule::base_expr => expr1 = Self::parse_base_expr(root_item),
@@ -233,6 +226,106 @@ impl OmlValue {
             Rule::ids => root_item.as_str().to_string(),
             Rule::id => root_item.as_str().to_string(),
             _ => unreachable!(),
+        }
+    }
+
+    pub fn is_str(&self) -> bool {
+        match self {
+            OmlValue::None => false,
+            OmlValue::Bool(_) => false,
+            OmlValue::Int64(_) => false,
+            OmlValue::Float64(_) => false,
+            OmlValue::String(_) => true,
+            OmlValue::Array(_) => false,
+            OmlValue::Map(_) => false,
+            OmlValue::TempName(_) => todo!(),
+            OmlValue::Op2(_) => todo!(),
+            OmlValue::Op3(_) => todo!(),
+            OmlValue::FormatString(_) => true,
+        }
+    }
+
+    pub fn as_str(&self) -> Option<String> {}
+}
+
+impl Index<usize> for OmlValue {
+    type Output = OmlValue;
+    fn index(&self, index: usize) -> &Self::Output {
+        match self {
+            OmlValue::Array(arr) => arr.get(index).unwrap(),
+            _ => panic!(),
+        }
+    }
+}
+
+impl IndexMut<usize> for OmlValue {
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        match self {
+            OmlValue::Array(arr) => arr.get_mut(index).unwrap(),
+            _ => panic!(),
+        }
+    }
+}
+
+impl Index<&str> for OmlValue {
+    type Output = OmlValue;
+    fn index(&self, index: &str) -> &Self::Output {
+        match self {
+            OmlValue::Map(map) => map.get(index).unwrap(),
+            _ => panic!(),
+        }
+    }
+}
+
+impl IndexMut<&str> for OmlValue {
+    fn index_mut(&mut self, index: &str) -> &mut Self::Output {
+        match self {
+            OmlValue::Map(map) => map.get_mut(index).unwrap(),
+            _ => panic!(),
+        }
+    }
+}
+
+pub trait GetByUsizeExt {
+    fn get(&self, index: usize) -> Option<&Self>;
+    fn get_mut(&mut self, index: usize) -> Option<&mut Self>;
+}
+
+impl GetByUsizeExt for OmlValue {
+    fn get(&self, index: usize) -> Option<&Self> {
+        if let OmlValue::Array(arr) = self {
+            arr.get(index)
+        } else {
+            None
+        }
+    }
+    fn get_mut(&mut self, index: usize) -> Option<&mut Self> {
+        if let OmlValue::Array(arr) = self {
+            arr.get_mut(index)
+        } else {
+            None
+        }
+    }
+}
+
+pub trait GetByStrExt {
+    fn get(&self, index: &str) -> Option<&Self>;
+    fn get_mut(&mut self, index: &str) -> Option<&mut Self>;
+}
+
+impl GetByStrExt for OmlValue {
+    fn get(&self, index: &str) -> Option<&Self> {
+        if let OmlValue::Map(map) = self {
+            map.get(index)
+        } else {
+            None
+        }
+    }
+    fn get_mut(&mut self, index: &str) -> Option<&mut Self> {
+        if let OmlValue::Map(map) = self {
+            map.get_mut(index)
+        } else {
+            None
         }
     }
 }

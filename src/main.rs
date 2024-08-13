@@ -1,7 +1,7 @@
 mod ast;
 mod string_utils;
 
-use ast::OmlValue;
+pub use ast::OmlValue;
 
 fn main() {
     let oml_str = r#"
