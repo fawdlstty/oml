@@ -1,2 +1,2 @@
 # oml-rs
-Optimal Markup Language!
+Open Markup Language!
