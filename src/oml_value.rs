@@ -18,7 +18,7 @@ pub enum OmlValue {
     String(String),
     Array(Vec<OmlValue>),
     Map(HashMap<String, OmlValue>),
-    //TempName(String),
+    TempName(String),
     Op2((Box<OmlValue>, String, Box<OmlValue>)),
     Op3((Box<OmlValue>, Box<OmlValue>, Box<OmlValue>)),
     FormatString((Vec<String>, Vec<OmlValue>)),
@@ -245,7 +245,45 @@ impl OmlValue {
         }
     }
 
-    pub fn as_str(&self) -> Option<String> {}
+    pub fn as_str(&self) -> String {
+        match self {
+            OmlValue::None => "none".to_string(),
+            OmlValue::Bool(b) => b.to_string(),
+            OmlValue::Int64(i) => i.to_string(),
+            OmlValue::Float64(f) => f.to_string(),
+            OmlValue::String(s) => s.clone(),
+            OmlValue::Array(arr) => {
+                let arr: Vec<_> = arr.iter().map(|item| item.as_str()).collect();
+                format!("[{}]", arr.join(", "))
+            }
+            OmlValue::Map(map) => {
+                let mut ret = "{ ".to_string();
+                for (key, value) in map.iter() {
+                    if !ret.is_empty() {
+                        ret.push_str(", ");
+                    }
+                    ret.push_str(key);
+                    ret.push_str(": ");
+                    ret.push_str(&value.as_str());
+                }
+                ret.push_str(" }");
+                ret
+            }
+            OmlValue::TempName(_) => todo!(),
+            OmlValue::Op2((a, op, b)) => todo!(),
+            OmlValue::Op3((a, b, c)) => todo!(),
+            OmlValue::FormatString((strs, objs)) => {
+                let mut objs: Vec<_> = objs.iter().map(|obj| obj.as_str()).collect();
+                objs.push("".to_string());
+                let mut ret = "".to_string();
+                for (stra, strb) in strs.iter().zip(objs.iter()) {
+                    ret.push_str(&stra);
+                    ret.push_str(&strb);
+                }
+                ret
+            }
+        }
+    }
 }
 
 impl Index<usize> for OmlValue {
@@ -286,42 +324,32 @@ impl IndexMut<&str> for OmlValue {
     }
 }
 
-pub trait GetByUsizeExt {
-    fn get(&self, index: usize) -> Option<&Self>;
-    fn get_mut(&mut self, index: usize) -> Option<&mut Self>;
-}
-
-impl GetByUsizeExt for OmlValue {
-    fn get(&self, index: usize) -> Option<&Self> {
+impl OmlValue {
+    pub fn get_at(&self, index: usize) -> Option<&Self> {
         if let OmlValue::Array(arr) = self {
             arr.get(index)
         } else {
             None
         }
     }
-    fn get_mut(&mut self, index: usize) -> Option<&mut Self> {
+
+    pub fn get_at_mut(&mut self, index: usize) -> Option<&mut Self> {
         if let OmlValue::Array(arr) = self {
             arr.get_mut(index)
         } else {
             None
         }
     }
-}
 
-pub trait GetByStrExt {
-    fn get(&self, index: &str) -> Option<&Self>;
-    fn get_mut(&mut self, index: &str) -> Option<&mut Self>;
-}
-
-impl GetByStrExt for OmlValue {
-    fn get(&self, index: &str) -> Option<&Self> {
+    pub fn get(&self, index: &str) -> Option<&Self> {
         if let OmlValue::Map(map) = self {
             map.get(index)
         } else {
             None
         }
     }
-    fn get_mut(&mut self, index: &str) -> Option<&mut Self> {
+
+    pub fn get_mut(&mut self, index: &str) -> Option<&mut Self> {
         if let OmlValue::Map(map) = self {
             map.get_mut(index)
         } else {
