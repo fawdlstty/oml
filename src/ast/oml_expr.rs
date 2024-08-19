@@ -6,6 +6,31 @@ use pest_derive::Parser;
 use std::collections::HashMap;
 use std::ops::{Index, IndexMut};
 
+const OP2_LEVELS: HashMap<&str, usize> = [
+    ("**", 0),
+    ("*", 1),
+    ("/", 1),
+    ("%", 1),
+    ("+", 2),
+    ("-", 2),
+    ("<<", 3),
+    (">>", 3),
+    ("^", 4),
+    ("|", 4),
+    ("&", 4),
+    ("<", 5),
+    ("<=", 5),
+    (">", 5),
+    (">=", 5),
+    ("==", 6),
+    ("!=", 6),
+    ("&&", 7),
+    ("||", 8),
+]
+.iter()
+.cloned()
+.collect();
+
 #[derive(Parser)]
 #[grammar = "../oml.pest"]
 pub struct OmlParser;
@@ -140,10 +165,7 @@ impl OmlExpr {
     fn parse_expr(root: pest::iterators::Pair<'_, Rule>) -> OmlExpr {
         let root_item = root.into_inner().next().unwrap();
         match root_item.as_rule() {
-            Rule::base_expr => Self::parse_base_expr(root_item),
-            Rule::array_expr => Self::parse_array_expr(root_item),
-            Rule::map_expr => Self::parse_map_expr(root_item),
-            Rule::op2_expr => Self::parse_op2_expr(root_item),
+            Rule::weak_expr => Self::parse_weak_expr(root_item),
             Rule::op3_expr => Self::parse_op3_expr(root_item),
             _ => unreachable!(),
         }
@@ -184,40 +206,125 @@ impl OmlExpr {
         OmlExpr::make(vec![], OmlExprImpl::Map(map))
     }
 
-    fn parse_op2_expr(root: pest::iterators::Pair<'_, Rule>) -> OmlExpr {
-        let mut expr1 = OmlExpr::new();
-        let mut op = "".to_string();
-        let mut expr2 = OmlExpr::new();
+    fn parse_strong_expr(root: pest::iterators::Pair<'_, Rule>) -> OmlExpr {
+        let root_item = root.into_inner().next().unwrap();
+        match root_item.as_rule() {
+            Rule::base_expr => Self::parse_base_expr(root_item),
+            Rule::array_expr => Self::parse_array_expr(root_item),
+            Rule::map_expr => Self::parse_map_expr(root_item),
+            _ => unreachable!(),
+        }
+    }
+
+    fn parse_middle_expr(root: pest::iterators::Pair<'_, Rule>) -> OmlExpr {
+        enum SuffixOp {
+            AccessAttr(String),
+            AccessMethod((String, Vec<OmlExpr>)),
+            Op(String),
+        }
+        impl SuffixOp {
+            pub fn parse(root: pest::iterators::Pair<'_, Rule>) -> Self {
+                let root_str = root.as_str();
+                let mut id = "".to_string();
+                let mut args = None;
+                for root_item in root.into_inner() {
+                    match root_item.as_rule() {
+                        Rule::id => id = root_item.as_str().to_string(),
+                        Rule::_exprs => {
+                            let mut exprs = vec![];
+                            for root_item1 in root_item.into_inner() {
+                                match root_item1.as_rule() {
+                                    Rule::expr => exprs.push(OmlExpr::parse_expr(root_item1)),
+                                    _ => unreachable!(),
+                                }
+                            }
+                            args = Some(exprs)
+                        }
+                        _ => unreachable!(),
+                    }
+                }
+                if id.is_empty() {
+                    SuffixOp::Op(root_str.to_string())
+                } else if let Some(args) = args {
+                    SuffixOp::AccessMethod((id, args))
+                } else {
+                    SuffixOp::AccessAttr(id)
+                }
+            }
+        }
+
+        let mut expr = OmlExpr::new();
+        let mut prefix_ops = vec![];
+        let mut suffix_ops = vec![];
         for root_item in root.into_inner() {
             match root_item.as_rule() {
-                Rule::base_expr => expr1 = Self::parse_base_expr(root_item),
-                Rule::op2 => op = root_item.as_str().to_string(),
-                Rule::expr => expr2 = Self::parse_expr(root_item),
+                Rule::strong_expr => expr = Self::parse_strong_expr(root_item),
+                Rule::expr_prefix => prefix_ops.push(root_item.as_str().to_string()),
+                Rule::expr_suffix => suffix_ops.push(SuffixOp::parse(root_item)),
                 _ => unreachable!(),
             }
         }
-        OmlExpr::make(
-            vec![],
-            OmlExprImpl::Op2((Box::new(expr1), op, Box::new(expr2))),
-        )
+        // TODO process
+        expr
+    }
+
+    fn parse_weak_expr(root: pest::iterators::Pair<'_, Rule>) -> OmlExpr {
+        let mut exprs = vec![];
+        let mut ops = vec![];
+        //
+        for root_item in root.into_inner() {
+            match root_item.as_rule() {
+                Rule::middle_expr => exprs.push(Self::parse_middle_expr(root_item)),
+                Rule::op2 => ops.push(root_item.as_str().to_string()),
+                _ => unreachable!(),
+            }
+        }
+        let ops: Vec<_> = ops
+            .into_iter()
+            .map(|op| (op, *OP2_LEVELS.get(&op[..]).unwrap()))
+            .collect();
+        //
+        for i in 0..9 {
+            if exprs.len() == 1 {
+                break;
+            }
+            if i == 5 {
+                for j in 1..ops.len() {
+                    if ops[j - i].1 == i && ops[j].1 == i {
+                        exprs.insert(j, exprs[j].clone());
+                        ops.insert(j, ("&&".to_string(), *OP2_LEVELS.get("&&").unwrap()));
+                    }
+                }
+            }
+            for (idx, (op, level)) in ops.iter().enumerate() {
+                if *level != i {
+                    continue;
+                }
+                let left = exprs.remove(idx);
+                let right = exprs.remove(idx);
+                let op = ops.remove(idx).0;
+                let expr = OmlExpr::make(
+                    vec![],
+                    OmlExprImpl::Op2((Box::new(left), op, Box::new(right))),
+                );
+                exprs.insert(idx, expr);
+            }
+        }
+        exprs.remove(0)
     }
 
     fn parse_op3_expr(root: pest::iterators::Pair<'_, Rule>) -> OmlExpr {
-        let mut expr1 = OmlExpr::new();
-        let mut expr2 = OmlExpr::new();
-        let mut expr3 = OmlExpr::new();
+        let mut exprs = vec![];
         for root_item in root.into_inner() {
             match root_item.as_rule() {
-                Rule::base_expr => expr1 = Self::parse_base_expr(root_item),
-                Rule::expr => expr2 = Self::parse_expr(root_item),
-                Rule::expr1 => expr3 = Self::parse_expr(root_item.into_inner().next().unwrap()),
+                Rule::middle_expr => exprs.push(Self::parse_middle_expr(root_item)),
                 _ => unreachable!(),
             }
         }
-        OmlExpr::make(
-            vec![],
-            OmlExprImpl::Op3((Box::new(expr1), Box::new(expr2), Box::new(expr3))),
-        )
+        let expr1 = Box::new(exprs.remove(0));
+        let expr2 = Box::new(exprs.remove(0));
+        let expr3 = Box::new(exprs.remove(0));
+        OmlExpr::make(vec![], OmlExprImpl::Op3((expr1, expr2, expr3)))
     }
 
     fn parse_literal(root: pest::iterators::Pair<'_, Rule>) -> OmlExpr {

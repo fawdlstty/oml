@@ -11,22 +11,28 @@ format_string_part3   = @{ "}" ~ ("\\\"" | (!"\"" ~ ANY))* ~ "\"" }
 format_string_literal =  { format_string | (format_string_part1 ~ expr ~ (format_string_part2 ~ expr)* ~ format_string_part3) }
 literal               =  { boolean_literal | number_literal | string_literal | format_string_literal }
 
-id  = { (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
-ids = { id ~ ("." ~ id)* }
+id      = { (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
+ids     = { id ~ ("." ~ id)* }
+anno_if = { "@if" ~ expr }
 
-op2             = { "+" | "-" | "*" | "/" | "**" | "%" | "|" | "&" | "||" | "&&" | "<<" | ">>" | "^" | "<" | "<=" | ">" | ">=" | "==" | "!=" }
-base_expr       = { literal | ids | ("(" ~ expr ~ ")") }
-array_expr      = { "[" ~ (expr ~ ("," ~ expr)*)* ~ "]" }
-map_expr        = { "{" ~ (map_assign_pair ~ ("," ~ map_assign_pair)*)* ~ "}" }
-op2_expr        = { base_expr ~ op2 ~ expr }
-op3_expr        = { base_expr ~ "?" ~ expr ~ ":" ~ expr1 }
-expr1           = { expr }
-expr            = { array_expr | map_expr | op2_expr | op3_expr | base_expr }
-assign_pair     = { ids ~ "=" ~ expr }
+op2         = { "+" | "-" | "*" | "/" | "**" | "%" | "|" | "&" | "||" | "&&" | "<<" | ">>" | "^" | "<" | "<=" | ">" | ">=" | "==" | "!=" }
+base_expr   = { literal | ids | ("(" ~ expr ~ ")") }
+_exprs      = { (expr ~ ("," ~ expr)*)? }
+array_expr  = { "[" ~ _exprs ~ "]" }
+map_expr    = { "{" ~ (map_assign_pair ~ ("," ~ map_assign_pair)*)* ~ "}" }
+strong_expr = { base_expr | array_expr | map_expr }
+expr_prefix = { "++" | "--" | "!" | "-" | "~" }
+expr_suffix = { ("." ~ id ~ ("(" ~ _exprs ~ ")")?) | "++" | "--" }
+middle_expr = { expr_prefix* ~ strong_expr ~ expr_suffix* }
+weak_expr   = { middle_expr ~ (op2 ~ middle_expr)* }
+op3_expr    = { middle_expr ~ "?" ~ middle_expr ~ ":" ~ middle_expr }
+expr        = { weak_expr | op3_expr }
+
+assign_pair     = { anno_if? ~ ids ~ "=" ~ expr }
 map_assign_pair = { ids ~ ":" ~ expr }
 
-group_head       = { "[" ~ ids ~ "]" }
-group_array_head = { "[[" ~ ids ~ "]]" }
+group_head       = { anno_if? ~ "[" ~ ids ~ "]" }
+group_array_head = { anno_if? ~ "[[" ~ ids ~ "]]" }
 group_block      = { (group_head | group_array_head) ~ assign_pair* }
 
 oml = { SOI ~ (group_block)* ~ EOI }

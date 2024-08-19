@@ -1,12 +1,12 @@
 [package]
 name = "oml"
-version = "0.0.1"
+version = "0.0.2"
 edition = "2021"
 rust-version = "1.70"
 license = "MIT"
 repository = "https://github.com/fawdlstty/oml"
 homepage = "https://github.com/fawdlstty/oml"
-description = "Rust advanced queue library"
+description = "Open Markup Language!"
 keywords = ["oml", "markup", "configuration"]
 categories = []
 
