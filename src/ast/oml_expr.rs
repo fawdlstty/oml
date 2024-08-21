@@ -1,35 +1,43 @@
-use super::eval::Op2Evaluator;
+use super::eval::{Op1Evaluator, Op2Evaluator};
 use super::oml_value::OmlValue;
 use crate::string_utils::IntoBaseExt;
 use pest::Parser;
 use pest_derive::Parser;
 use std::collections::HashMap;
 use std::ops::{Index, IndexMut};
+use std::sync::OnceLock;
 
-const OP2_LEVELS: HashMap<&str, usize> = [
-    ("**", 0),
-    ("*", 1),
-    ("/", 1),
-    ("%", 1),
-    ("+", 2),
-    ("-", 2),
-    ("<<", 3),
-    (">>", 3),
-    ("^", 4),
-    ("|", 4),
-    ("&", 4),
-    ("<", 5),
-    ("<=", 5),
-    (">", 5),
-    (">=", 5),
-    ("==", 6),
-    ("!=", 6),
-    ("&&", 7),
-    ("||", 8),
-]
-.iter()
-.cloned()
-.collect();
+fn get_op2_level(op: &str) -> usize {
+    static OP2_LEVELS: OnceLock<HashMap<&'static str, usize>> = OnceLock::new();
+    *OP2_LEVELS
+        .get_or_init(|| {
+            [
+                ("**", 0),
+                ("*", 1),
+                ("/", 1),
+                ("%", 1),
+                ("+", 2),
+                ("-", 2),
+                ("<<", 3),
+                (">>", 3),
+                ("^", 4),
+                ("|", 4),
+                ("&", 4),
+                ("<", 5),
+                ("<=", 5),
+                (">", 5),
+                (">=", 5),
+                ("==", 6),
+                ("!=", 6),
+                ("&&", 7),
+                ("||", 8),
+            ]
+            .into_iter()
+            .collect()
+        })
+        .get(op)
+        .unwrap_or(&9)
+}
 
 #[derive(Parser)]
 #[grammar = "../oml.pest"]
@@ -48,9 +56,13 @@ pub enum OmlExprImpl {
     Array(Vec<OmlExpr>),
     Map(HashMap<String, OmlExpr>),
     TempName(String),
+    Op1Prefix((String, Box<OmlExpr>)),
+    Op1Suffix((Box<OmlExpr>, String)),
     Op2((Box<OmlExpr>, String, Box<OmlExpr>)),
     Op3((Box<OmlExpr>, Box<OmlExpr>, Box<OmlExpr>)),
     FormatString((Vec<String>, Vec<OmlExpr>)),
+    AccessVar((Box<OmlExpr>, String)),
+    InvokeFunc((Box<OmlExpr>, String, Vec<OmlExpr>)),
 }
 
 impl OmlExpr {
@@ -218,8 +230,8 @@ impl OmlExpr {
 
     fn parse_middle_expr(root: pest::iterators::Pair<'_, Rule>) -> OmlExpr {
         enum SuffixOp {
-            AccessAttr(String),
-            AccessMethod((String, Vec<OmlExpr>)),
+            AccessVar(String),
+            InvokeFunc((String, Vec<OmlExpr>)),
             Op(String),
         }
         impl SuffixOp {
@@ -246,9 +258,9 @@ impl OmlExpr {
                 if id.is_empty() {
                     SuffixOp::Op(root_str.to_string())
                 } else if let Some(args) = args {
-                    SuffixOp::AccessMethod((id, args))
+                    SuffixOp::InvokeFunc((id, args))
                 } else {
-                    SuffixOp::AccessAttr(id)
+                    SuffixOp::AccessVar(id)
                 }
             }
         }
@@ -264,7 +276,22 @@ impl OmlExpr {
                 _ => unreachable!(),
             }
         }
-        // TODO process
+        while !prefix_ops.is_empty() {
+            let prefix_op = prefix_ops.remove(prefix_ops.len());
+            expr = OmlExpr::make(vec![], OmlExprImpl::Op1Prefix((prefix_op, Box::new(expr))));
+        }
+        while !suffix_ops.is_empty() {
+            expr = OmlExpr::make(
+                vec![],
+                match suffix_ops.remove(0) {
+                    SuffixOp::AccessVar(name) => OmlExprImpl::AccessVar((Box::new(expr), name)),
+                    SuffixOp::InvokeFunc((name, args)) => {
+                        OmlExprImpl::InvokeFunc((Box::new(expr), name, args))
+                    }
+                    SuffixOp::Op(suffix_op) => OmlExprImpl::Op1Suffix((Box::new(expr), suffix_op)),
+                },
+            )
+        }
         expr
     }
 
@@ -279,12 +306,15 @@ impl OmlExpr {
                 _ => unreachable!(),
             }
         }
-        let ops: Vec<_> = ops
+        let mut ops: Vec<_> = ops
             .into_iter()
-            .map(|op| (op, *OP2_LEVELS.get(&op[..]).unwrap()))
+            .map(|op| {
+                let level = get_op2_level(&op[..]);
+                (op, level)
+            })
             .collect();
         //
-        for i in 0..9 {
+        for i in 0..10 {
             if exprs.len() == 1 {
                 break;
             }
@@ -292,13 +322,15 @@ impl OmlExpr {
                 for j in 1..ops.len() {
                     if ops[j - i].1 == i && ops[j].1 == i {
                         exprs.insert(j, exprs[j].clone());
-                        ops.insert(j, ("&&".to_string(), *OP2_LEVELS.get("&&").unwrap()));
+                        ops.insert(j, ("&&".to_string(), get_op2_level("&&")));
                     }
                 }
             }
-            for (idx, (op, level)) in ops.iter().enumerate() {
-                if *level != i {
-                    continue;
+            for idx in 0..ops.len() {
+                if let Some((_, level)) = ops.get(idx) {
+                    if *level != i {
+                        continue;
+                    }
                 }
                 let left = exprs.remove(idx);
                 let right = exprs.remove(idx);
@@ -421,6 +453,24 @@ impl OmlExpr {
                     }
                 }
             }
+            OmlExprImpl::Op1Prefix((name, expr)) => {
+                let (val, tmp_success) = expr.evalute2(path, last_result)?;
+                success &= tmp_success;
+                if tmp_success {
+                    Op1Evaluator::eval_prefix(name, val)?
+                } else {
+                    OmlValue::None
+                }
+            }
+            OmlExprImpl::Op1Suffix((expr, name)) => {
+                let (val, tmp_success) = expr.evalute2(path, last_result)?;
+                success &= tmp_success;
+                if tmp_success {
+                    Op1Evaluator::eval_suffix(name, val)?
+                } else {
+                    OmlValue::None
+                }
+            }
             OmlExprImpl::Op2((left, op, right)) => {
                 let (left, tmp_success1) = left.evalute2(path, last_result)?;
                 success &= tmp_success1;
@@ -467,6 +517,8 @@ impl OmlExpr {
                     OmlValue::None
                 }
             }
+            OmlExprImpl::AccessVar(_) => todo!(),
+            OmlExprImpl::InvokeFunc(_) => todo!(),
         };
         Ok((value, success))
     }

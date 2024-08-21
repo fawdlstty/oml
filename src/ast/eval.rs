@@ -1,9 +1,37 @@
 use super::oml_value::{ApplyExt, OmlValue};
 
+pub(crate) struct Op1Evaluator {}
+
+impl Op1Evaluator {
+    pub fn eval_prefix(op: &str, right: OmlValue) -> Result<OmlValue, String> {
+        Ok(match (op, right) {
+            ("++", OmlValue::Int64(n)) => OmlValue::Int64(n + 1),
+            ("++", OmlValue::Float64(n)) => OmlValue::Float64(n + 1.0),
+            ("--", OmlValue::Int64(n)) => OmlValue::Int64(n - 1),
+            ("--", OmlValue::Float64(n)) => OmlValue::Float64(n - 1.0),
+            ("!", OmlValue::Bool(b)) => OmlValue::Bool(!b),
+            ("-", OmlValue::Int64(n)) => OmlValue::Int64(-n),
+            ("-", OmlValue::Float64(n)) => OmlValue::Float64(-n),
+            ("~", OmlValue::Int64(n)) => OmlValue::Int64(!n),
+            _ => return Err(format!("illegal operator: {}", op)),
+        })
+    }
+
+    pub fn eval_suffix(op: &str, left: OmlValue) -> Result<OmlValue, String> {
+        Ok(match (op, left) {
+            ("++", OmlValue::Int64(n)) => OmlValue::Int64(n + 1),
+            ("++", OmlValue::Float64(n)) => OmlValue::Float64(n + 1.0),
+            ("--", OmlValue::Int64(n)) => OmlValue::Int64(n - 1),
+            ("--", OmlValue::Float64(n)) => OmlValue::Float64(n - 1.0),
+            _ => return Err(format!("illegal operator: {}", op)),
+        })
+    }
+}
+
 pub(crate) struct Op2Evaluator {}
 
 impl Op2Evaluator {
-    pub fn eval(mut left: OmlValue, op: &str, mut right: OmlValue) -> Result<OmlValue, String> {
+    pub fn eval(left: OmlValue, op: &str, right: OmlValue) -> Result<OmlValue, String> {
         match (left, op, right) {
             (OmlValue::Bool(left), _, OmlValue::Bool(right)) => {
                 Ok(OmlValue::Bool(Self::eval_bool(left, op, right)?))
