@@ -161,18 +161,49 @@ impl IndexMut<usize> for OmlValue {
 impl Index<&str> for OmlValue {
     type Output = OmlValue;
     fn index(&self, index: &str) -> &Self::Output {
-        match self {
-            OmlValue::Map(map) => map.get(index).unwrap(),
-            _ => panic!(),
+        static NULL_EXPR: OmlValue = OmlValue::None;
+        if index == "" {
+            return self;
+        } else if let Some(p) = index.find('.') {
+            let (a, b) = index.split_at(p);
+            self.index(a).index(&b[1..])
+        } else {
+            match self {
+                OmlValue::Map(map) => map.get(index).unwrap_or(&NULL_EXPR),
+                _ => &NULL_EXPR,
+            }
         }
     }
 }
 
 impl IndexMut<&str> for OmlValue {
     fn index_mut(&mut self, index: &str) -> &mut Self::Output {
-        match self {
-            OmlValue::Map(map) => map.get_mut(index).unwrap(),
-            _ => panic!(),
+        static NULL_EXPR: OmlValue = OmlValue::None;
+        // let null_expr = unsafe {
+        //     std::mem::transmute::<*const OmlExpr, *mut OmlExpr>(&NULL_EXPR as *const OmlExpr)
+        // };
+        // let null_expr = unsafe { &mut *null_expr };
+        // if index == "" {
+        //     return self;
+        // } else if let Some(p) = index.find('.') {
+        //     let (a, b) = index.split_at(p);
+        //     self.index_mut(a).index_mut(&b[1..])
+        // } else {
+        //     match &mut self.value {
+        //         OmlExprImpl::Map(map) => map.get_mut(index).unwrap_or(null_expr),
+        //         _ => null_expr,
+        //     }
+        // }
+        if index == "" {
+            return self;
+        } else if let Some(p) = index.find('.') {
+            let (a, b) = index.split_at(p);
+            self.index_mut(a).index_mut(&b[1..])
+        } else {
+            match self {
+                OmlValue::Map(map) => map.get_mut(index).unwrap(),
+                _ => panic!(),
+            }
         }
     }
 }

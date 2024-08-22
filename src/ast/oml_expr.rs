@@ -3,6 +3,7 @@ use super::oml_value::OmlValue;
 use crate::string_utils::IntoBaseExt;
 use pest::Parser;
 use pest_derive::Parser;
+use std::cell::UnsafeCell;
 use std::collections::HashMap;
 use std::ops::{Index, IndexMut};
 use std::sync::OnceLock;
@@ -575,18 +576,55 @@ impl IndexMut<usize> for OmlExpr {
 impl Index<&str> for OmlExpr {
     type Output = OmlExpr;
     fn index(&self, index: &str) -> &Self::Output {
-        match &self.value {
-            OmlExprImpl::Map(map) => map.get(index).unwrap(),
-            _ => panic!(),
+        static NULL_EXPR: OmlExpr = OmlExpr {
+            enable_if: Vec::new(),
+            value: OmlExprImpl::Value(OmlValue::None),
+        };
+        if index == "" {
+            return self;
+        } else if let Some(p) = index.find('.') {
+            let (a, b) = index.split_at(p);
+            self.index(a).index(&b[1..])
+        } else {
+            match &self.value {
+                OmlExprImpl::Map(map) => map.get(index).unwrap_or(&NULL_EXPR),
+                _ => &NULL_EXPR,
+            }
         }
     }
 }
 
 impl IndexMut<&str> for OmlExpr {
     fn index_mut(&mut self, index: &str) -> &mut Self::Output {
-        match &mut self.value {
-            OmlExprImpl::Map(map) => map.get_mut(index).unwrap(),
-            _ => panic!(),
+        // static NULL_EXPR: OmlExpr = OmlExpr {
+        //     enable_if: Vec::new(),
+        //     value: OmlExprImpl::Value(OmlValue::None),
+        // };
+        // let null_expr = unsafe {
+        //     std::mem::transmute::<*const OmlExpr, *mut OmlExpr>(&NULL_EXPR as *const OmlExpr)
+        // };
+        // let null_expr = unsafe { &mut *null_expr };
+        // if index == "" {
+        //     return self;
+        // } else if let Some(p) = index.find('.') {
+        //     let (a, b) = index.split_at(p);
+        //     self.index_mut(a).index_mut(&b[1..])
+        // } else {
+        //     match &mut self.value {
+        //         OmlExprImpl::Map(map) => map.get_mut(index).unwrap_or(null_expr),
+        //         _ => null_expr,
+        //     }
+        // }
+        if index == "" {
+            return self;
+        } else if let Some(p) = index.find('.') {
+            let (a, b) = index.split_at(p);
+            self.index_mut(a).index_mut(&b[1..])
+        } else {
+            match &mut self.value {
+                OmlExprImpl::Map(map) => map.get_mut(index).unwrap(),
+                _ => panic!(),
+            }
         }
     }
 }
