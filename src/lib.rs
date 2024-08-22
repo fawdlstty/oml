@@ -1,4 +1,5 @@
 mod ast;
+pub mod ffi;
 mod string_utils;
 
 pub use ast::oml_expr::OmlExpr;

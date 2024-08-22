@@ -55,27 +55,6 @@ impl OmlValue {
         }
     }
 
-    pub fn as_float(&self) -> Option<f64> {
-        match self {
-            OmlValue::Float64(f) => Some(*f),
-            _ => None,
-        }
-    }
-
-    pub fn is_array(&self) -> bool {
-        match self {
-            OmlValue::Array(_) => true,
-            _ => false,
-        }
-    }
-
-    pub fn as_array(&self) -> Option<Vec<OmlValue>> {
-        match self {
-            OmlValue::Array(arr) => Some(arr.clone()),
-            _ => None,
-        }
-    }
-
     pub fn is_str(&self) -> bool {
         match self {
             OmlValue::String(_) => true,
@@ -107,6 +86,27 @@ impl OmlValue {
                 ret.push_str(" }");
                 ret
             }
+        }
+    }
+
+    pub fn as_float(&self) -> Option<f64> {
+        match self {
+            OmlValue::Float64(f) => Some(*f),
+            _ => None,
+        }
+    }
+
+    pub fn is_array(&self) -> bool {
+        match self {
+            OmlValue::Array(_) => true,
+            _ => false,
+        }
+    }
+
+    pub fn as_array(&self) -> Option<Vec<OmlValue>> {
+        match self {
+            OmlValue::Array(arr) => Some(arr.clone()),
+            _ => None,
         }
     }
 
