@@ -3,15 +3,15 @@
 ![version](https://img.shields.io/badge/dynamic/toml?url=https%3A%2F%2Fraw.githubusercontent.com%2Ffawdlstty%2Foml%2Fmain%2FCargo.toml&query=package.version&label=version)
 ![status](https://img.shields.io/github/actions/workflow/status/fawdlstty/oml/rust.yml)
 
-English | [简体中文](README.zh_CN.md)
+[English](README.md) | 简体中文
 
-Open Markup Language! A dynamic configuration scripting language that can embed script code in the configuration file to achieve dynamic configuration update.
+Open Markup Language! 一款动态配置脚本语言，可在配置文件里嵌入脚本代码，实现动态更新配置。
 
-## Manual
+## 用户手册
 
 ### rust
 
-Install: Run `cargo add oml` in the project directory
+安装：在项目目录下运行 `cargo add oml`
 
 ```rust
 fn main() {
@@ -46,26 +46,26 @@ name = $"hello world {value + 12}"
 #pragma comment(lib, "oml.lib")
 
 int main() {
-	auto oexpr = oml::OmlExpr::from_str(R"(
+    auto oexpr = oml::OmlExpr::from_str(R"(
 [hello]
 value = 12
 name = $"hello world {value + 12}"
 )");
-	if (oexpr.index() == 1) {
-		auto err = std::get<std::string>(oexpr);
-		std::cout << err << std::endl;
-		return 0;
-	}
-	auto expr = std::get<oml::OmlExpr>(oexpr);
-	auto ovalue = expr.evalute();
-	if (ovalue.index() == 1) {
-		auto err = std::get<std::string>(ovalue);
-		std::cout << err << std::endl;
-		return 0;
-	}
-	auto value = std::get<oml::OmlValue>(ovalue);
-	auto str = value["hello"]["name"].as_str();
-	std::cout << str << std::endl;
-	return 0;
+    if (oexpr.index() == 1) {
+        auto err = std::get<std::string>(oexpr);
+        std::cout << err << std::endl;
+        return 0;
+    }
+    auto expr = std::get<oml::OmlExpr>(oexpr);
+    auto ovalue = expr.evalute();
+    if (ovalue.index() == 1) {
+        auto err = std::get<std::string>(ovalue);
+        std::cout << err << std::endl;
+        return 0;
+    }
+    auto value = std::get<oml::OmlValue>(ovalue);
+    auto str = value["hello"]["name"].as_str();
+    std::cout << str << std::endl;
+    return 0;
 }
 ```
