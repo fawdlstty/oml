@@ -4,7 +4,9 @@
 #include <format>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <variant>
+#include <vector>
 
 extern "C" {
 #include "oml.h"
@@ -56,9 +58,16 @@ public:
     return oml_value_get_map_length(pval_.get(), path_.c_str());
   }
 
-  std::string get_map_key(int index) {
-    auto str = oml_value_get_map_key(pval_.get(), path_.c_str(), index);
-    std::string ret = str;
+  std::vector<std::string> get_map_keys() {
+    auto str = oml_value_get_keys(pval_.get(), path_.c_str());
+    std::string_view strv = str;
+    std::vector<std::string> ret;
+    while (size_t p = strv.find("#")) {
+      ret.push_back(std::string(strv.substr(0, p)));
+      strv = strv.substr(p + 1);
+    }
+    if (!strv.empty())
+      ret.push_back(std::string(strv));
     oml_release_str(str);
     return ret;
   }

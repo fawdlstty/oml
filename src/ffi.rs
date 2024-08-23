@@ -182,21 +182,14 @@ pub extern "C" fn oml_value_get_map_length(pval: *mut c_void, ppath: *const c_ch
 }
 
 #[no_mangle]
-pub extern "C" fn oml_value_get_map_key(
-    pval: *mut c_void,
-    ppath: *const c_char,
-    index: c_int,
-) -> *const c_char {
+pub extern "C" fn oml_value_get_keys(pval: *mut c_void, ppath: *const c_char) -> *const c_char {
     let val = unsafe { Box::from_raw(pval as *mut OmlValue) };
     let path = unsafe { CStr::from_ptr(ppath).to_str().unwrap_or("") };
     let ret = match val[path].as_map() {
         Some(map) => {
-            let mut keys: Vec<_> = map.keys().collect();
+            let mut keys: Vec<_> = map.keys().map(|a| &a[..]).collect();
             keys.sort();
-            match keys.get(index as usize) {
-                Some(ret) => CString::new((*ret).clone()).unwrap().into_raw(),
-                None => std::ptr::null(),
-            }
+            CString::new(keys.join("#")).unwrap().into_raw()
         }
         None => std::ptr::null(),
     };

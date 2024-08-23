@@ -38,7 +38,7 @@ int oml_value_is_map(void *pval, const char *ppath);
 
 int oml_value_get_map_length(void *pval, const char *ppath);
 
-const char *oml_value_get_map_key(void *pval, const char *ppath, int index);
+const char *oml_value_get_keys(void *pval, const char *ppath);
 
 void oml_release_expr(const void *pexpr);
 
