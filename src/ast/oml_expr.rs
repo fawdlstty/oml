@@ -664,4 +664,26 @@ impl OmlExpr {
             None
         }
     }
+
+    pub fn get_with_path(&mut self, path: &str) -> Option<&mut Self> {
+        let path_items: Vec<_> = path.split('.').collect();
+        let mut obj_ref = self;
+        for path_item in path_items.into_iter() {
+            if path_item.starts_with('[') {
+                let num = &path_item[1..path_item.len() - 1];
+                let num: usize = num.parse().unwrap();
+                if let Some(obj) = obj_ref.get_at_mut(num) {
+                    obj_ref = obj;
+                } else {
+                    return None;
+                }
+            }
+            if let Some(obj) = obj_ref.get_mut(path_item) {
+                obj_ref = obj;
+            } else {
+                return None;
+            }
+        }
+        Some(obj_ref)
+    }
 }

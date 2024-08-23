@@ -45,15 +45,21 @@ pub extern "C" fn oml_expr_evalute(
     ppval: *mut *mut c_void,
     pperr: *mut *const c_char,
 ) -> c_int {
-    let expr = unsafe { Box::from_raw(pexpr as *mut OmlExpr) };
+    let mut expr = unsafe { Box::from_raw(pexpr as *mut OmlExpr) };
     let path = unsafe { CStr::from_ptr(ppath).to_str().unwrap_or("") };
-    let ret = match expr[path].evalute() {
-        Ok(root) => {
+    let ret = match expr.get_with_path(path).map(|a| a.evalute()) {
+        Some(Ok(root)) => {
             unsafe { *ppval = Box::leak(Box::new(root)) as *mut OmlValue as *mut c_void };
             unsafe { *pperr = std::ptr::null_mut() };
             true
         }
-        Err(err) => {
+        Some(Err(err)) => {
+            unsafe { *ppval = std::ptr::null_mut() };
+            unsafe { *pperr = CString::new(err).unwrap().into_raw() };
+            false
+        }
+        None => {
+            let err = "path not found";
             unsafe { *ppval = std::ptr::null_mut() };
             unsafe { *pperr = CString::new(err).unwrap().into_raw() };
             false
@@ -65,81 +71,105 @@ pub extern "C" fn oml_expr_evalute(
 
 #[no_mangle]
 pub extern "C" fn oml_value_is_none(pval: *mut c_void, ppath: *const c_char) -> c_int {
-    let val = unsafe { Box::from_raw(pval as *mut OmlValue) };
+    let mut val = unsafe { Box::from_raw(pval as *mut OmlValue) };
     let path = unsafe { CStr::from_ptr(ppath).to_str().unwrap_or("") };
-    let ret = val[path].is_none();
+    let ret = val
+        .get_with_path(path)
+        .map(|a| a.is_none())
+        .unwrap_or(false);
     Box::leak(val);
     ret.as_cint()
 }
 
 #[no_mangle]
 pub extern "C" fn oml_value_is_bool(pval: *mut c_void, ppath: *const c_char) -> c_int {
-    let val = unsafe { Box::from_raw(pval as *mut OmlValue) };
+    let mut val = unsafe { Box::from_raw(pval as *mut OmlValue) };
     let path = unsafe { CStr::from_ptr(ppath).to_str().unwrap_or("") };
-    let ret = val[path].is_bool();
+    let ret = val
+        .get_with_path(path)
+        .map(|a| a.is_bool())
+        .unwrap_or(false);
     Box::leak(val);
     ret.as_cint()
 }
 
 #[no_mangle]
 pub extern "C" fn oml_value_as_bool(pval: *mut c_void, ppath: *const c_char) -> c_int {
-    let val = unsafe { Box::from_raw(pval as *mut OmlValue) };
+    let mut val = unsafe { Box::from_raw(pval as *mut OmlValue) };
     let path = unsafe { CStr::from_ptr(ppath).to_str().unwrap_or("") };
-    let ret = val[path].as_bool().unwrap_or(false);
+    let ret = val
+        .get_with_path(path)
+        .map(|a| a.as_bool())
+        .flatten()
+        .unwrap_or(false);
     Box::leak(val);
     ret.as_cint()
 }
 
 #[no_mangle]
 pub extern "C" fn oml_value_is_int(pval: *mut c_void, ppath: *const c_char) -> c_int {
-    let val = unsafe { Box::from_raw(pval as *mut OmlValue) };
+    let mut val = unsafe { Box::from_raw(pval as *mut OmlValue) };
     let path = unsafe { CStr::from_ptr(ppath).to_str().unwrap_or("") };
-    let ret = val[path].is_int();
+    let ret = val.get_with_path(path).map(|a| a.is_int()).unwrap_or(false);
     Box::leak(val);
     ret.as_cint()
 }
 
 #[no_mangle]
 pub extern "C" fn oml_value_as_int(pval: *mut c_void, ppath: *const c_char) -> c_longlong {
-    let val = unsafe { Box::from_raw(pval as *mut OmlValue) };
+    let mut val = unsafe { Box::from_raw(pval as *mut OmlValue) };
     let path = unsafe { CStr::from_ptr(ppath).to_str().unwrap_or("") };
-    let ret = val[path].as_int().unwrap_or(0);
+    let ret = val
+        .get_with_path(path)
+        .map(|a| a.as_int())
+        .flatten()
+        .unwrap_or(-1);
     Box::leak(val);
     ret
 }
 
 #[no_mangle]
 pub extern "C" fn oml_value_is_float(pval: *mut c_void, ppath: *const c_char) -> c_int {
-    let val = unsafe { Box::from_raw(pval as *mut OmlValue) };
+    let mut val = unsafe { Box::from_raw(pval as *mut OmlValue) };
     let path = unsafe { CStr::from_ptr(ppath).to_str().unwrap_or("") };
-    let ret = val[path].is_float();
+    let ret = val
+        .get_with_path(path)
+        .map(|a| a.is_float())
+        .unwrap_or(false);
     Box::leak(val);
     ret.as_cint()
 }
 
 #[no_mangle]
 pub extern "C" fn oml_value_as_float(pval: *mut c_void, ppath: *const c_char) -> c_double {
-    let val = unsafe { Box::from_raw(pval as *mut OmlValue) };
+    let mut val = unsafe { Box::from_raw(pval as *mut OmlValue) };
     let path = unsafe { CStr::from_ptr(ppath).to_str().unwrap_or("") };
-    let ret = val[path].as_float().unwrap_or(0.0);
+    let ret = val
+        .get_with_path(path)
+        .map(|a| a.as_float())
+        .flatten()
+        .unwrap_or(f64::NAN);
     Box::leak(val);
     ret
 }
 
 #[no_mangle]
 pub extern "C" fn oml_value_is_str(pval: *mut c_void, ppath: *const c_char) -> c_int {
-    let val = unsafe { Box::from_raw(pval as *mut OmlValue) };
+    let mut val = unsafe { Box::from_raw(pval as *mut OmlValue) };
     let path = unsafe { CStr::from_ptr(ppath).to_str().unwrap_or("") };
-    let ret = val[path].is_str();
+    let ret = val.get_with_path(path).map(|a| a.is_str()).unwrap_or(false);
     Box::leak(val);
     ret.as_cint()
 }
 
 #[no_mangle]
 pub extern "C" fn oml_value_as_str(pval: *mut c_void, ppath: *const c_char) -> *const c_char {
-    let val = unsafe { Box::from_raw(pval as *mut OmlValue) };
+    let mut val = unsafe { Box::from_raw(pval as *mut OmlValue) };
     let path = unsafe { CStr::from_ptr(ppath).to_str().unwrap_or("") };
-    let ret = val[path].as_str();
+    let ret = val
+        .get_with_path(path)
+        .map(|a| a.as_str())
+        .unwrap_or("".to_string());
     let ret = CString::new(ret).unwrap().into_raw();
     Box::leak(val);
     ret
@@ -147,52 +177,66 @@ pub extern "C" fn oml_value_as_str(pval: *mut c_void, ppath: *const c_char) -> *
 
 #[no_mangle]
 pub extern "C" fn oml_value_is_array(pval: *mut c_void, ppath: *const c_char) -> c_int {
-    let val = unsafe { Box::from_raw(pval as *mut OmlValue) };
+    let mut val = unsafe { Box::from_raw(pval as *mut OmlValue) };
     let path = unsafe { CStr::from_ptr(ppath).to_str().unwrap_or("") };
-    let ret = val[path].is_array();
+    let ret = val
+        .get_with_path(path)
+        .map(|a| a.is_array())
+        .unwrap_or(false);
     Box::leak(val);
     ret.as_cint()
 }
 
 #[no_mangle]
 pub extern "C" fn oml_value_get_array_length(pval: *mut c_void, ppath: *const c_char) -> c_int {
-    let val = unsafe { Box::from_raw(pval as *mut OmlValue) };
+    let mut val = unsafe { Box::from_raw(pval as *mut OmlValue) };
     let path = unsafe { CStr::from_ptr(ppath).to_str().unwrap_or("") };
-    let ret = val[path].as_array().map(|arr| arr.len()).unwrap_or(0);
+    let ret = val
+        .get_with_path(path)
+        .map(|a| a.as_array().map(|arr| arr.len()))
+        .flatten()
+        .unwrap_or(0);
     Box::leak(val);
     ret as c_int
 }
 
 #[no_mangle]
 pub extern "C" fn oml_value_is_map(pval: *mut c_void, ppath: *const c_char) -> c_int {
-    let val = unsafe { Box::from_raw(pval as *mut OmlValue) };
+    let mut val = unsafe { Box::from_raw(pval as *mut OmlValue) };
     let path = unsafe { CStr::from_ptr(ppath).to_str().unwrap_or("") };
-    let ret = val[path].is_map();
+    let ret = val.get_with_path(path).map(|a| a.is_map()).unwrap_or(false);
     Box::leak(val);
     ret.as_cint()
 }
 
 #[no_mangle]
 pub extern "C" fn oml_value_get_map_length(pval: *mut c_void, ppath: *const c_char) -> c_int {
-    let val = unsafe { Box::from_raw(pval as *mut OmlValue) };
+    let mut val = unsafe { Box::from_raw(pval as *mut OmlValue) };
     let path = unsafe { CStr::from_ptr(ppath).to_str().unwrap_or("") };
-    let ret = val[path].as_map().map(|arr| arr.len()).unwrap_or(0);
+    let ret = val
+        .get_with_path(path)
+        .map(|a| a.as_map().map(|map| map.len()))
+        .flatten()
+        .unwrap_or(0);
     Box::leak(val);
     ret as c_int
 }
 
 #[no_mangle]
 pub extern "C" fn oml_value_get_keys(pval: *mut c_void, ppath: *const c_char) -> *const c_char {
-    let val = unsafe { Box::from_raw(pval as *mut OmlValue) };
+    let mut val = unsafe { Box::from_raw(pval as *mut OmlValue) };
     let path = unsafe { CStr::from_ptr(ppath).to_str().unwrap_or("") };
-    let ret = match val[path].as_map() {
-        Some(map) => {
-            let mut keys: Vec<_> = map.keys().map(|a| &a[..]).collect();
-            keys.sort();
-            CString::new(keys.join("#")).unwrap().into_raw()
-        }
-        None => std::ptr::null(),
-    };
+    let ret = val
+        .get_with_path(path)
+        .map(|a| {
+            a.as_map().map(|map| {
+                let mut keys: Vec<_> = map.keys().map(|a| &a[..]).collect();
+                keys.sort();
+                CString::new(keys.join("#")).unwrap().into_raw() as *const i8
+            })
+        })
+        .flatten()
+        .unwrap_or(std::ptr::null());
     Box::leak(val);
     ret
 }

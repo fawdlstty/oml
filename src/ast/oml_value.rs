@@ -142,9 +142,10 @@ impl OmlValue {
 impl Index<usize> for OmlValue {
     type Output = OmlValue;
     fn index(&self, index: usize) -> &Self::Output {
+        static NULL_EXPR: OmlValue = OmlValue::None;
         match self {
-            OmlValue::Array(arr) => arr.get(index).unwrap(),
-            _ => panic!(),
+            OmlValue::Array(arr) => arr.get(index).unwrap_or(&NULL_EXPR),
+            _ => &NULL_EXPR,
         }
     }
 }
@@ -152,8 +153,17 @@ impl Index<usize> for OmlValue {
 impl IndexMut<usize> for OmlValue {
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         match self {
-            OmlValue::Array(arr) => arr.get_mut(index).unwrap(),
-            _ => panic!(),
+            OmlValue::Array(arr) => {
+                while arr.len() <= index {
+                    arr.push(OmlValue::None);
+                }
+                arr.get_mut(index).unwrap()
+            }
+            _ => {
+                let mut tmp = OmlValue::Array(vec![]);
+                std::mem::swap(self, &mut tmp);
+                self.index_mut(index)
+            }
         }
     }
 }
@@ -253,6 +263,28 @@ impl OmlValue {
         } else {
             None
         }
+    }
+
+    pub fn get_with_path(&mut self, path: &str) -> Option<&mut Self> {
+        let path_items: Vec<_> = path.split('.').collect();
+        let mut obj_ref = self;
+        for path_item in path_items.into_iter() {
+            if path_item.starts_with('[') {
+                let num = &path_item[1..path_item.len() - 1];
+                let num: usize = num.parse().unwrap();
+                if let Some(obj) = obj_ref.get_at_mut(num) {
+                    obj_ref = obj;
+                } else {
+                    return None;
+                }
+            }
+            if let Some(obj) = obj_ref.get_mut(path_item) {
+                obj_ref = obj;
+            } else {
+                return None;
+            }
+        }
+        Some(obj_ref)
     }
 }
 
