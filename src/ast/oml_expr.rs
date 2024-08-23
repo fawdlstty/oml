@@ -366,7 +366,10 @@ impl OmlExpr {
             vec![],
             OmlExprImpl::Value(match root_item.as_rule() {
                 Rule::boolean_literal => OmlValue::Bool(root_item.as_str() == "true"),
-                Rule::number_literal => OmlValue::Int64(root_item.as_str().parse().unwrap_or(0)),
+                Rule::number_literal => match root_item.as_str().parse::<i64>() {
+                    Ok(n) => OmlValue::Int64(n),
+                    Err(_) => OmlValue::String(root_item.as_str().into_base()),
+                },
                 Rule::string_literal => OmlValue::String(root_item.as_str().into_base()),
                 Rule::format_string_literal => return Self::parse_format_string_literal(root_item),
                 _ => unreachable!(),
