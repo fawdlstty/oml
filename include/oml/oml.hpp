@@ -1,9 +1,14 @@
+#pragma once
+
 #include <cstdint>
 #include <format>
+#include <memory>
 #include <string>
 #include <variant>
 
+extern "C" {
 #include "oml.h"
+}
 
 namespace oml {
 class OmlExpr;
@@ -81,7 +86,7 @@ public:
   from_str(const std::string &str) {
     void *pexpr = nullptr;
     const char *perr = nullptr;
-    if (oml_expr_from_str(str.c_str(), &pexpr, &perr)) {
+    if (!!oml_expr_from_str(str.c_str(), &pexpr, &perr)) {
       return OmlExpr(pexpr);
     } else {
       std::string err = perr;
@@ -93,7 +98,7 @@ public:
   std::variant<OmlValue, std::string> evalute() {
     void *pval = nullptr;
     const char *perr = nullptr;
-    if (oml_expr_evalute(pexpr_.get(), path_.c_str(), &pval, &perr)) {
+    if (!!oml_expr_evalute(pexpr_.get(), path_.c_str(), &pval, &perr)) {
       return OmlValue(pval);
     } else {
       std::string err = perr;

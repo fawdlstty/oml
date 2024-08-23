@@ -16,6 +16,7 @@ impl AsCInt for bool {
     }
 }
 
+/// Try parse string and get oml-expr pointer
 #[no_mangle]
 pub extern "C" fn oml_expr_from_str(
     psrc: *const c_char,

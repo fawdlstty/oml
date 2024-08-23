@@ -1,11 +1,13 @@
-#include <cstdarg>
-#include <cstdint>
-#include <cstdlib>
-#include <ostream>
-#include <new>
+#pragma once
 
-extern "C" {
+#include <stdarg.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdlib.h>
 
+/**
+ * Try parse string and get oml-expr pointer
+ */
 int oml_expr_from_str(const char *psrc, void **ppexpr, const char **pperr);
 
 int oml_expr_evalute(void *pexpr, const char *ppath, void **ppval, const char **pperr);
@@ -43,5 +45,3 @@ void oml_release_expr(const void *pexpr);
 void oml_release_value(const void *pval);
 
 void oml_release_str(const char *pstr);
-
-}  // extern "C"
