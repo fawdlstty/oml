@@ -188,31 +188,20 @@ impl Index<&str> for OmlValue {
 
 impl IndexMut<&str> for OmlValue {
     fn index_mut(&mut self, index: &str) -> &mut Self::Output {
-        static NULL_EXPR: OmlValue = OmlValue::None;
-        // let null_expr = unsafe {
-        //     std::mem::transmute::<*const OmlExpr, *mut OmlExpr>(&NULL_EXPR as *const OmlExpr)
-        // };
-        // let null_expr = unsafe { &mut *null_expr };
-        // if index == "" {
-        //     return self;
-        // } else if let Some(p) = index.find('.') {
-        //     let (a, b) = index.split_at(p);
-        //     self.index_mut(a).index_mut(&b[1..])
-        // } else {
-        //     match &mut self.value {
-        //         OmlExprImpl::Map(map) => map.get_mut(index).unwrap_or(null_expr),
-        //         _ => null_expr,
-        //     }
-        // }
         if index == "" {
             return self;
-        } else if let Some(p) = index.find('.') {
-            let (a, b) = index.split_at(p);
-            self.index_mut(a).index_mut(&b[1..])
         } else {
-            match self {
-                OmlValue::Map(map) => map.get_mut(index).unwrap(),
-                _ => panic!(),
+            if !self.is_map() {
+                *self = OmlValue::Map(HashMap::new());
+            }
+            if let OmlValue::Map(map) = self {
+                if map.get(index).is_none() {
+                    let val = OmlValue::None;
+                    map.insert(index.to_string(), val.clone());
+                }
+                map.get_mut(index).unwrap()
+            } else {
+                panic!()
             }
         }
     }
@@ -265,7 +254,7 @@ impl OmlValue {
         }
     }
 
-    pub fn get_with_path(&mut self, path: &str) -> Option<&mut Self> {
+    pub fn get_with_path_mut(&mut self, path: &str) -> Option<&mut Self> {
         let path_items: Vec<_> = path.split('.').collect();
         let mut obj_ref = self;
         for path_item in path_items.into_iter() {
@@ -279,6 +268,28 @@ impl OmlValue {
                 }
             }
             if let Some(obj) = obj_ref.get_mut(path_item) {
+                obj_ref = obj;
+            } else {
+                return None;
+            }
+        }
+        Some(obj_ref)
+    }
+
+    pub fn get_with_path(&self, path: &str) -> Option<&Self> {
+        let path_items: Vec<_> = path.split('.').collect();
+        let mut obj_ref = self;
+        for path_item in path_items.into_iter() {
+            if path_item.starts_with('[') {
+                let num = &path_item[1..path_item.len() - 1];
+                let num: usize = num.parse().unwrap();
+                if let Some(obj) = obj_ref.get_at(num) {
+                    obj_ref = obj;
+                } else {
+                    return None;
+                }
+            }
+            if let Some(obj) = obj_ref.get(path_item) {
                 obj_ref = obj;
             } else {
                 return None;

@@ -24,11 +24,12 @@ name = $"hello world {value + 12}"
         Ok(root) => root,
         Err(err) => panic!("Error: {}", err),
     };
+    root["hello"]["value"].set_int(30);
     let root = match root.evalute() {
         Ok(root) => root,
         Err(err) => panic!("Error: {}", err),
     };
-    assert_eq!(root["hello"]["name"].as_str(), "hello world 24");
+    assert_eq!(root["hello"]["name"].as_str(), "hello world 42");
 }
 ```
 

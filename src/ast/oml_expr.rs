@@ -599,34 +599,20 @@ impl Index<&str> for OmlExpr {
 
 impl IndexMut<&str> for OmlExpr {
     fn index_mut(&mut self, index: &str) -> &mut Self::Output {
-        // static NULL_EXPR: OmlExpr = OmlExpr {
-        //     enable_if: Vec::new(),
-        //     value: OmlExprImpl::Value(OmlValue::None),
-        // };
-        // let null_expr = unsafe {
-        //     std::mem::transmute::<*const OmlExpr, *mut OmlExpr>(&NULL_EXPR as *const OmlExpr)
-        // };
-        // let null_expr = unsafe { &mut *null_expr };
-        // if index == "" {
-        //     return self;
-        // } else if let Some(p) = index.find('.') {
-        //     let (a, b) = index.split_at(p);
-        //     self.index_mut(a).index_mut(&b[1..])
-        // } else {
-        //     match &mut self.value {
-        //         OmlExprImpl::Map(map) => map.get_mut(index).unwrap_or(null_expr),
-        //         _ => null_expr,
-        //     }
-        // }
         if index == "" {
             return self;
-        } else if let Some(p) = index.find('.') {
-            let (a, b) = index.split_at(p);
-            self.index_mut(a).index_mut(&b[1..])
         } else {
-            match &mut self.value {
-                OmlExprImpl::Map(map) => map.get_mut(index).unwrap(),
-                _ => panic!(),
+            if !self.value.is_map() {
+                self.value = OmlExprImpl::Map(HashMap::new());
+            }
+            if let OmlExprImpl::Map(map) = &mut self.value {
+                if map.get(index).is_none() {
+                    let val = OmlExpr::new();
+                    map.insert(index.to_string(), val.clone());
+                }
+                map.get_mut(index).unwrap()
+            } else {
+                panic!()
             }
         }
     }
@@ -665,7 +651,7 @@ impl OmlExpr {
         }
     }
 
-    pub fn get_with_path(&mut self, path: &str) -> Option<&mut Self> {
+    pub fn get_with_path_mut(&mut self, path: &str) -> Option<&mut Self> {
         let path_items: Vec<_> = path.split('.').collect();
         let mut obj_ref = self;
         for path_item in path_items.into_iter() {
@@ -685,5 +671,58 @@ impl OmlExpr {
             }
         }
         Some(obj_ref)
+    }
+
+    pub fn get_with_path(&self, path: &str) -> Option<&Self> {
+        let path_items: Vec<_> = path.split('.').collect();
+        let mut obj_ref = self;
+        for path_item in path_items.into_iter() {
+            if path_item.starts_with('[') {
+                let num = &path_item[1..path_item.len() - 1];
+                let num: usize = num.parse().unwrap();
+                if let Some(obj) = obj_ref.get_at(num) {
+                    obj_ref = obj;
+                } else {
+                    return None;
+                }
+            }
+            if let Some(obj) = obj_ref.get(path_item) {
+                obj_ref = obj;
+            } else {
+                return None;
+            }
+        }
+        Some(obj_ref)
+    }
+}
+
+impl OmlExprImpl {
+    pub fn is_map(&self) -> bool {
+        match self {
+            OmlExprImpl::Map(_) => true,
+            _ => false,
+        }
+    }
+}
+
+impl OmlExpr {
+    pub fn set_null(&mut self) {
+        self.value = OmlExprImpl::None;
+    }
+
+    pub fn set_bool(&mut self, val: bool) {
+        self.value = OmlExprImpl::Value(OmlValue::Bool(val));
+    }
+
+    pub fn set_int(&mut self, val: i64) {
+        self.value = OmlExprImpl::Value(OmlValue::Int64(val));
+    }
+
+    pub fn set_float(&mut self, val: f64) {
+        self.value = OmlExprImpl::Value(OmlValue::Float64(val));
+    }
+
+    pub fn set_string(&mut self, val: impl Into<String>) {
+        self.value = OmlExprImpl::Value(OmlValue::String(val.into()));
     }
 }

@@ -7,13 +7,14 @@ fn test1() {
 value = 12
 name = $"hello world {value + 12}"
 "#;
-    let root = match OmlExpr::from_str(oml_str) {
+    let mut root = match OmlExpr::from_str(oml_str) {
         Ok(root) => root,
         Err(err) => panic!("Error: {}", err),
     };
+    root["hello"]["value"].set_int(30);
     let root = match root.evalute() {
         Ok(root) => root,
         Err(err) => panic!("Error: {}", err),
     };
-    assert_eq!(root["hello"]["name"].as_str(), "hello world 24");
+    assert_eq!(root["hello"]["name"].as_str(), "hello world 42");
 }
