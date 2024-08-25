@@ -1,3 +1,4 @@
+use crate::ast::oml_expr::OmlExprImpl;
 use crate::{OmlExpr, OmlValue};
 use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_double, c_int, c_longlong, c_void};
@@ -36,6 +37,51 @@ pub extern "C" fn oml_expr_from_str(
             false.as_cint()
         }
     }
+}
+
+#[no_mangle]
+pub extern "C" fn oml_expr_set_none(pexpr: *mut c_void, ppath: *const c_char) {
+    let mut expr = unsafe { Box::from_raw(pexpr as *mut OmlExpr) };
+    let path = unsafe { CStr::from_ptr(ppath).to_str().unwrap_or("") };
+    expr.get_with_path_mut(path)
+        .map(|a| *a = OmlExpr::make(vec![], OmlExprImpl::None));
+}
+
+#[no_mangle]
+pub extern "C" fn oml_expr_set_bool(pexpr: *mut c_void, ppath: *const c_char, value: c_int) {
+    let mut expr = unsafe { Box::from_raw(pexpr as *mut OmlExpr) };
+    let path = unsafe { CStr::from_ptr(ppath).to_str().unwrap_or("") };
+    expr.get_with_path_mut(path)
+        .map(|a| *a = OmlExpr::make(vec![], OmlExprImpl::Value(OmlValue::Bool(value != 0))));
+}
+
+#[no_mangle]
+pub extern "C" fn oml_expr_set_int(pexpr: *mut c_void, ppath: *const c_char, value: c_longlong) {
+    let mut expr = unsafe { Box::from_raw(pexpr as *mut OmlExpr) };
+    let path = unsafe { CStr::from_ptr(ppath).to_str().unwrap_or("") };
+    expr.get_with_path_mut(path)
+        .map(|a| *a = OmlExpr::make(vec![], OmlExprImpl::Value(OmlValue::Int64(value))));
+}
+
+#[no_mangle]
+pub extern "C" fn oml_expr_set_float(pexpr: *mut c_void, ppath: *const c_char, value: c_double) {
+    let mut expr = unsafe { Box::from_raw(pexpr as *mut OmlExpr) };
+    let path = unsafe { CStr::from_ptr(ppath).to_str().unwrap_or("") };
+    expr.get_with_path_mut(path)
+        .map(|a| *a = OmlExpr::make(vec![], OmlExprImpl::Value(OmlValue::Float64(value))));
+}
+
+#[no_mangle]
+pub extern "C" fn oml_expr_set_string(
+    pexpr: *mut c_void,
+    ppath: *const c_char,
+    pvalue: *const c_char,
+) {
+    let mut expr = unsafe { Box::from_raw(pexpr as *mut OmlExpr) };
+    let path = unsafe { CStr::from_ptr(ppath).to_str().unwrap_or("") };
+    let value = unsafe { CStr::from_ptr(pvalue).to_str().unwrap_or("") }.to_string();
+    expr.get_with_path_mut(path)
+        .map(|a| *a = OmlExpr::make(vec![], OmlExprImpl::Value(OmlValue::String(value))));
 }
 
 #[no_mangle]
@@ -239,6 +285,55 @@ pub extern "C" fn oml_value_get_keys(pval: *mut c_void, ppath: *const c_char) ->
         .unwrap_or(std::ptr::null());
     Box::leak(val);
     ret
+}
+
+#[no_mangle]
+pub extern "C" fn oml_value_set_none(pval: *mut c_void, ppath: *const c_char) -> c_int {
+    let mut val = unsafe { Box::from_raw(pval as *mut OmlValue) };
+    let path = unsafe { CStr::from_ptr(ppath).to_str().unwrap_or("") };
+    val.get_with_path_mut(path)
+        .map(|a| *a = OmlValue::None)
+        .is_some()
+        .as_cint()
+}
+
+#[no_mangle]
+pub extern "C" fn oml_value_set_bool(pval: *mut c_void, ppath: *const c_char, value: c_int) {
+    let mut val = unsafe { Box::from_raw(pval as *mut OmlValue) };
+    let path = unsafe { CStr::from_ptr(ppath).to_str().unwrap_or("") };
+    val.get_with_path_mut(path)
+        .map(|a| *a = OmlValue::Bool(value != 0));
+}
+
+#[no_mangle]
+pub extern "C" fn oml_value_set_int(pval: *mut c_void, ppath: *const c_char, value: c_longlong) {
+    let mut val = unsafe { Box::from_raw(pval as *mut OmlValue) };
+    let path = unsafe { CStr::from_ptr(ppath).to_str().unwrap_or("") };
+    val.get_with_path_mut(path)
+        .map(|a| *a = OmlValue::Int64(value));
+}
+
+#[no_mangle]
+pub extern "C" fn oml_value_set_float(pval: *mut c_void, ppath: *const c_char, value: c_double) {
+    let mut val = unsafe { Box::from_raw(pval as *mut OmlValue) };
+    let path = unsafe { CStr::from_ptr(ppath).to_str().unwrap_or("") };
+    val.get_with_path_mut(path)
+        .map(|a| *a = OmlValue::Float64(value));
+}
+
+#[no_mangle]
+pub extern "C" fn oml_value_set_string(
+    pval: *mut c_void,
+    ppath: *const c_char,
+    pvalue: *const c_char,
+) -> c_int {
+    let mut val = unsafe { Box::from_raw(pval as *mut OmlValue) };
+    let path = unsafe { CStr::from_ptr(ppath).to_str().unwrap_or("") };
+    let value = unsafe { CStr::from_ptr(pvalue).to_str().unwrap_or("") }.to_string();
+    val.get_with_path_mut(path)
+        .map(|a| *a = OmlValue::String(value))
+        .is_some()
+        .as_cint()
 }
 
 #[no_mangle]

@@ -58,6 +58,7 @@ name = $"hello world {value + 12}"
 		return 0;
 	}
 	auto expr = std::get<oml::OmlExpr>(oexpr);
+    expr["hello"]["value"].set_int(30);
 	auto ovalue = expr.evalute();
 	if (ovalue.index() == 1) {
 		auto err = std::get<std::string>(ovalue);

@@ -328,3 +328,25 @@ impl ApplyExt for HashMap<String, OmlValue> {
         }
     }
 }
+
+impl OmlValue {
+    pub fn set_null(&mut self) {
+        *self = OmlValue::None;
+    }
+
+    pub fn set_bool(&mut self, val: bool) {
+        *self = OmlValue::Bool(val);
+    }
+
+    pub fn set_int(&mut self, val: i64) {
+        *self = OmlValue::Int64(val);
+    }
+
+    pub fn set_float(&mut self, val: f64) {
+        *self = OmlValue::Float64(val);
+    }
+
+    pub fn set_string(&mut self, val: impl Into<String>) {
+        *self = OmlValue::String(val.into());
+    }
+}
