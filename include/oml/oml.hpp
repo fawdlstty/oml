@@ -17,12 +17,10 @@ class OmlExpr;
 class OmlValue {
   friend class OmlExpr;
 
-  OmlValue(void *pval, std::string path = "")
-      : pval_(std::shared_ptr<void>(pval, oml_release_value)), path_(path) {}
-  OmlValue(std::shared_ptr<void> pval, std::string path = "")
-      : pval_(pval), path_(path) {}
+  OmlValue(void *pval, std::string path = "") : pval_(std::shared_ptr<void>(pval, oml_release_value)), path_(path) {}
+  OmlValue(std::shared_ptr<void> pval, std::string path = "") : pval_(pval), path_(path) {}
 
-public:
+ public:
   bool is_none() { return !!oml_value_is_none(pval_.get(), path_.c_str()); }
   bool is_bool() { return !!oml_value_is_bool(pval_.get(), path_.c_str()); }
   bool is_int() { return !!oml_value_is_int(pval_.get(), path_.c_str()); }
@@ -31,19 +29,11 @@ public:
   bool is_array() { return !!oml_value_is_array(pval_.get(), path_.c_str()); }
   bool is_map() { return !!oml_value_is_map(pval_.get(), path_.c_str()); }
 
-  void set_none() { oml_expr_set_none(pval_.get(), path_.c_str()); }
-  void set_bool(bool val) {
-    oml_expr_set_bool(pval_.get(), path_.c_str(), val ? 1 : 0);
-  }
-  void set_int(int64_t val) {
-    oml_expr_set_int(pval_.get(), path_.c_str(), val);
-  }
-  void set_float(double val) {
-    oml_expr_set_float(pval_.get(), path_.c_str(), val);
-  }
-  void set_string(std::string val) {
-    oml_expr_set_string(pval_.get(), path_.c_str(), val.c_str());
-  }
+  void set_none() { oml_value_set_none(pval_.get(), path_.c_str()); }
+  void set_bool(bool val) { oml_value_set_bool(pval_.get(), path_.c_str(), val ? 1 : 0); }
+  void set_int(int64_t val) { oml_value_set_int(pval_.get(), path_.c_str(), val); }
+  void set_float(double val) { oml_value_set_float(pval_.get(), path_.c_str(), val); }
+  void set_string(std::string val) { oml_value_set_string(pval_.get(), path_.c_str(), val.c_str()); }
 
   bool as_bool() { return !!oml_value_as_bool(pval_.get(), path_.c_str()); }
   int64_t as_int() { return oml_value_as_int(pval_.get(), path_.c_str()); }
@@ -54,12 +44,8 @@ public:
     oml_release_str(str);
     return ret;
   }
-  int32_t get_array_length() {
-    return oml_value_get_array_length(pval_.get(), path_.c_str());
-  }
-  int32_t get_map_length() {
-    return oml_value_get_map_length(pval_.get(), path_.c_str());
-  }
+  int32_t get_array_length() { return oml_value_get_array_length(pval_.get(), path_.c_str()); }
+  int32_t get_map_length() { return oml_value_get_map_length(pval_.get(), path_.c_str()); }
   std::vector<std::string> get_map_keys() {
     auto str = oml_value_get_keys(pval_.get(), path_.c_str());
     std::string_view strv = str;
@@ -68,8 +54,7 @@ public:
       ret.push_back(std::string(strv.substr(0, p)));
       strv = strv.substr(p + 1);
     }
-    if (!strv.empty())
-      ret.push_back(std::string(strv));
+    if (!strv.empty()) ret.push_back(std::string(strv));
     oml_release_str(str);
     return ret;
   }
@@ -81,34 +66,23 @@ public:
     return OmlValue(pval_, path);
   }
 
-private:
+ private:
   std::shared_ptr<void> pval_;
   std::string path_;
 };
 
 class OmlExpr {
-  OmlExpr(void *pexpr, std::string path = "")
-      : pexpr_(std::shared_ptr<void>(pexpr, oml_release_expr)), path_(path) {}
-  OmlExpr(std::shared_ptr<void> pexpr, std::string path = "")
-      : pexpr_(pexpr), path_(path) {}
+  OmlExpr(void *pexpr, std::string path = "") : pexpr_(std::shared_ptr<void>(pexpr, oml_release_expr)), path_(path) {}
+  OmlExpr(std::shared_ptr<void> pexpr, std::string path = "") : pexpr_(pexpr), path_(path) {}
 
-public:
+ public:
   void set_none() { oml_expr_set_none(pexpr_.get(), path_.c_str()); }
-  void set_bool(bool val) {
-    oml_value_set_bool(pexpr_.get(), path_.c_str(), val ? 1 : 0);
-  }
-  void set_int(int64_t val) {
-    oml_value_set_int(pexpr_.get(), path_.c_str(), val);
-  }
-  void set_float(double val) {
-    oml_value_set_float(pexpr_.get(), path_.c_str(), val);
-  }
-  void set_string(std::string val) {
-    oml_value_set_string(pexpr_.get(), path_.c_str(), val.c_str());
-  }
+  void set_bool(bool val) { oml_expr_set_bool(pexpr_.get(), path_.c_str(), val ? 1 : 0); }
+  void set_int(int64_t val) { oml_expr_set_int(pexpr_.get(), path_.c_str(), val); }
+  void set_float(double val) { oml_expr_set_float(pexpr_.get(), path_.c_str(), val); }
+  void set_string(std::string val) { oml_expr_set_string(pexpr_.get(), path_.c_str(), val.c_str()); }
 
-  inline static std::variant<OmlExpr, std::string>
-  from_str(const std::string &str) {
+  inline static std::variant<OmlExpr, std::string> from_str(const std::string &str) {
     void *pexpr = nullptr;
     const char *perr = nullptr;
     if (!!oml_expr_from_str(str.c_str(), &pexpr, &perr)) {
@@ -139,8 +113,8 @@ public:
     return OmlValue(pexpr_, path);
   }
 
-private:
+ private:
   std::shared_ptr<void> pexpr_;
   std::string path_;
 };
-} // namespace oml
+}  // namespace oml

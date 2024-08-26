@@ -4,10 +4,10 @@ COMMENT    = _{ ("//" ~ (!NEWLINE ~ ANY)*) | ("/*" ~ (!"*/" ~ ANY)* ~ "*/") }
 boolean_literal       = @{ "true" | "false" }
 number_literal        = @{ "-"? ~ ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT+)? }
 string_literal        = @{ "\"" ~ ("\\\"" | (!"\"" ~ ANY))* ~ "\"" }
-format_string         = @{ "$\"" ~ ("\\\"" | (!"{" ~ ANY))* ~ "\"" }
-format_string_part1   = @{ "$\"" ~ ("\\\"" | (!"{" ~ ANY))* ~ "{" }
-format_string_part2   = @{ "}" ~ ("\\\"" | (!"{" ~ ANY))* ~ "{" }
-format_string_part3   = @{ "}" ~ ("\\\"" | (!"\"" ~ ANY))* ~ "\"" }
+format_string         = @{ "$\"" ~ ("\\\"" | (!("{" | NEWLINE) ~ ANY))* ~ "\"" }
+format_string_part1   = @{ "$\"" ~ ("\\\"" | (!("{" | NEWLINE) ~ ANY))* ~ "{" }
+format_string_part2   = @{ "}" ~ ("\\\"" | (!("{" | NEWLINE) ~ ANY))* ~ "{" }
+format_string_part3   = @{ "}" ~ ("\\\"" | (!("\"" | NEWLINE) ~ ANY))* ~ "\"" }
 format_string_literal =  { format_string | (format_string_part1 ~ expr ~ (format_string_part2 ~ expr)* ~ format_string_part3) }
 literal               =  { boolean_literal | number_literal | string_literal | format_string_literal }
 
@@ -31,8 +31,8 @@ expr        = { weak_expr | op3_expr }
 assign_pair     = { anno_if? ~ ids ~ "=" ~ expr }
 map_assign_pair = { ids ~ ":" ~ expr }
 
-group_head       = { anno_if? ~ "[" ~ ids ~ "]" }
-group_array_head = { anno_if? ~ "[[" ~ ids ~ "]]" }
-group_block      = { (group_head | group_array_head) ~ assign_pair* }
+group_head       = { "[" ~ ids ~ "]" }
+group_array_head = { "[[" ~ ids ~ "]]" }
+group_block      = { anno_if? ~ (group_head | group_array_head) ~ assign_pair* }
 
 oml = { SOI ~ (group_block)* ~ EOI }

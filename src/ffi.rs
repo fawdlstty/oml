@@ -1,4 +1,3 @@
-use crate::ast::oml_expr::OmlExprImpl;
 use crate::{OmlExpr, OmlValue};
 use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_double, c_int, c_longlong, c_void};
@@ -43,8 +42,7 @@ pub extern "C" fn oml_expr_from_str(
 pub extern "C" fn oml_expr_set_none(pexpr: *mut c_void, ppath: *const c_char) {
     let mut expr = unsafe { Box::from_raw(pexpr as *mut OmlExpr) };
     let path = unsafe { CStr::from_ptr(ppath).to_str().unwrap_or("") };
-    expr.get_with_path_mut(path)
-        .map(|a| *a = OmlExpr::make(vec![], OmlExprImpl::None));
+    expr.get_with_path_mut(path).map(|a| *a = OmlExpr::None);
 }
 
 #[no_mangle]
@@ -52,7 +50,7 @@ pub extern "C" fn oml_expr_set_bool(pexpr: *mut c_void, ppath: *const c_char, va
     let mut expr = unsafe { Box::from_raw(pexpr as *mut OmlExpr) };
     let path = unsafe { CStr::from_ptr(ppath).to_str().unwrap_or("") };
     expr.get_with_path_mut(path)
-        .map(|a| *a = OmlExpr::make(vec![], OmlExprImpl::Value(OmlValue::Bool(value != 0))));
+        .map(|a| *a = OmlExpr::Value(OmlValue::Bool(value != 0)));
 }
 
 #[no_mangle]
@@ -60,7 +58,7 @@ pub extern "C" fn oml_expr_set_int(pexpr: *mut c_void, ppath: *const c_char, val
     let mut expr = unsafe { Box::from_raw(pexpr as *mut OmlExpr) };
     let path = unsafe { CStr::from_ptr(ppath).to_str().unwrap_or("") };
     expr.get_with_path_mut(path)
-        .map(|a| *a = OmlExpr::make(vec![], OmlExprImpl::Value(OmlValue::Int64(value))));
+        .map(|a| *a = OmlExpr::Value(OmlValue::Int64(value)));
 }
 
 #[no_mangle]
@@ -68,7 +66,7 @@ pub extern "C" fn oml_expr_set_float(pexpr: *mut c_void, ppath: *const c_char, v
     let mut expr = unsafe { Box::from_raw(pexpr as *mut OmlExpr) };
     let path = unsafe { CStr::from_ptr(ppath).to_str().unwrap_or("") };
     expr.get_with_path_mut(path)
-        .map(|a| *a = OmlExpr::make(vec![], OmlExprImpl::Value(OmlValue::Float64(value))));
+        .map(|a| *a = OmlExpr::Value(OmlValue::Float64(value)));
 }
 
 #[no_mangle]
@@ -81,7 +79,7 @@ pub extern "C" fn oml_expr_set_string(
     let path = unsafe { CStr::from_ptr(ppath).to_str().unwrap_or("") };
     let value = unsafe { CStr::from_ptr(pvalue).to_str().unwrap_or("") }.to_string();
     expr.get_with_path_mut(path)
-        .map(|a| *a = OmlExpr::make(vec![], OmlExprImpl::Value(OmlValue::String(value))));
+        .map(|a| *a = OmlExpr::Value(OmlValue::String(value)));
 }
 
 #[no_mangle]

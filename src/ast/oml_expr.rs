@@ -3,7 +3,6 @@ use super::oml_value::OmlValue;
 use crate::string_utils::IntoBaseExt;
 use pest::Parser;
 use pest_derive::Parser;
-use std::cell::UnsafeCell;
 use std::collections::HashMap;
 use std::ops::{Index, IndexMut};
 use std::sync::OnceLock;
@@ -45,13 +44,7 @@ fn get_op2_level(op: &str) -> usize {
 pub struct OmlParser;
 
 #[derive(Debug, Clone)]
-pub struct OmlExpr {
-    pub enable_if: Vec<OmlExprImpl>,
-    pub value: OmlExprImpl,
-}
-
-#[derive(Debug, Clone)]
-pub enum OmlExprImpl {
+pub enum OmlExpr {
     None,
     Value(OmlValue),
     Array(Vec<OmlExpr>),
@@ -64,18 +57,25 @@ pub enum OmlExprImpl {
     FormatString((Vec<String>, Vec<OmlExpr>)),
     AccessVar((Box<OmlExpr>, String)),
     InvokeFunc((Box<OmlExpr>, String, Vec<OmlExpr>)),
+    IfAnno(OmlExprIfAnno),
+}
+
+#[derive(Debug, Clone)]
+pub struct OmlExprIfAnno {
+    pub exprs: Vec<(OmlExpr, OmlExpr)>,
+    pub default: Option<Box<OmlExpr>>,
 }
 
 impl OmlExpr {
     pub fn new() -> Self {
-        Self {
-            enable_if: vec![],
-            value: OmlExprImpl::None,
-        }
+        OmlExpr::None
     }
 
-    pub fn make(enable_if: Vec<OmlExprImpl>, value: OmlExprImpl) -> Self {
-        Self { enable_if, value }
+    pub fn make_if_anno(if_anno: OmlExpr, value: OmlExpr) -> Self {
+        Self::IfAnno(OmlExprIfAnno {
+            exprs: vec![(if_anno, value)],
+            default: None,
+        })
     }
 
     pub fn from_str(content: &str) -> Result<OmlExpr, String> {
@@ -86,13 +86,16 @@ impl OmlExpr {
     }
 
     fn apply(&mut self, val: OmlExpr) {
-        match &mut self.value {
-            OmlExprImpl::Array(arr) => arr.push(val),
-            OmlExprImpl::Map(map) => {
-                if let OmlExprImpl::Map(map2) = val.value {
+        match self {
+            OmlExpr::None => *self = val,
+            OmlExpr::Array(arr) => {
+                if let OmlExpr::Array(arr2) = val {
+                    arr.extend(arr2);
+                }
+            }
+            OmlExpr::Map(map) => {
+                if let OmlExpr::Map(map2) = val {
                     for (key, mut val) in map2.into_iter() {
-                        // TODO process enable_if with not same
-                        //val.enable_if.extend(val.enable_if.clone());
                         if let Some(self_k) = map.get_mut(&key) {
                             self_k.apply(val);
                         } else {
@@ -103,7 +106,14 @@ impl OmlExpr {
                     *self = val;
                 }
             }
-            _ => *self = val,
+            OmlExpr::IfAnno(if_anno) => {
+                if let OmlExpr::IfAnno(if_anno2) = val {
+                    if_anno.exprs.extend(if_anno2.exprs);
+                } else if if_anno.default.is_none() {
+                    if_anno.default = Some(Box::new(val));
+                }
+            }
+            _ => {}
         }
     }
 
@@ -123,54 +133,75 @@ impl OmlExpr {
     }
 
     fn parse_block(root: pest::iterators::Pair<'_, Rule>) -> Result<OmlExpr, String> {
+        let mut anno_if_expr = None;
         let mut head = "".to_string();
         let mut is_array_head = false;
         let mut ret = HashMap::new();
         for root_item in root.into_inner() {
             match root_item.as_rule() {
+                Rule::anno_if => {
+                    anno_if_expr = Some(Self::parse_expr(root_item.into_inner().next().unwrap()))
+                }
                 Rule::group_head => head = Self::parse_ids(root_item),
                 Rule::group_array_head => {
                     head = Self::parse_ids(root_item);
                     is_array_head = true;
                 }
                 Rule::assign_pair => {
-                    let (key, mut value) = Self::parse_pair(root_item);
+                    let (key, mut value) = Self::parse_assign_pair(root_item);
                     let mut keys: Vec<_> = key.split('.').map(|key| key.to_string()).collect();
                     while keys.len() > 1 {
                         let mut tmp_map = HashMap::new();
-                        tmp_map.insert(keys.remove(keys.len() - 1), value);
-                        value = OmlExpr::make(vec![], OmlExprImpl::Map(tmp_map));
+                        tmp_map
+                            .entry(keys.remove(keys.len() - 1))
+                            .or_insert(OmlExpr::None)
+                            .apply(value);
+                        value = OmlExpr::Map(tmp_map);
                     }
-                    ret.insert(keys.remove(0), value);
+                    ret.entry(keys.remove(0))
+                        .or_insert(OmlExpr::None)
+                        .apply(value);
                 }
                 _ => unreachable!(),
             }
         }
-        let mut ret = OmlExprImpl::Map(ret);
+        let mut ret = OmlExpr::Map(ret);
         if is_array_head {
-            ret = OmlExprImpl::Array(vec![OmlExpr::make(vec![], ret)]);
+            ret = OmlExpr::Array(vec![ret]);
         }
         let mut keys: Vec<_> = head.split('.').map(|key| key.to_string()).collect();
         while !keys.is_empty() {
             let name = keys.remove(keys.len() - 1);
-            ret = OmlExprImpl::Map(
-                vec![(name, OmlExpr::make(vec![], ret))]
-                    .into_iter()
-                    .collect(),
-            );
+            ret = OmlExpr::Map(vec![(name, ret)].into_iter().collect());
         }
-        Ok(OmlExpr::make(vec![], ret))
+        if let Some(anno_if_expr) = anno_if_expr {
+            ret = OmlExpr::IfAnno(OmlExprIfAnno {
+                exprs: vec![(anno_if_expr, ret)],
+                default: None,
+            })
+        }
+        Ok(ret)
     }
 
-    fn parse_pair(root: pest::iterators::Pair<'_, Rule>) -> (String, OmlExpr) {
+    fn parse_assign_pair(root: pest::iterators::Pair<'_, Rule>) -> (String, OmlExpr) {
+        let mut anno_if_expr = None;
         let mut keys = "".to_string();
         let mut value = OmlExpr::new();
         for root_item in root.into_inner() {
             match root_item.as_rule() {
+                Rule::anno_if => {
+                    anno_if_expr = Some(Self::parse_expr(root_item.into_inner().next().unwrap()))
+                }
                 Rule::ids => keys = Self::parse_ids(root_item),
                 Rule::expr => value = Self::parse_expr(root_item),
                 _ => unreachable!(),
             }
+        }
+        if let Some(anno_if_expr) = anno_if_expr {
+            value = OmlExpr::IfAnno(OmlExprIfAnno {
+                exprs: vec![(anno_if_expr, value)],
+                default: None,
+            })
         }
         (keys, value)
     }
@@ -188,7 +219,7 @@ impl OmlExpr {
         let root_item = root.into_inner().next().unwrap();
         match root_item.as_rule() {
             Rule::literal => Self::parse_literal(root_item),
-            Rule::ids => OmlExpr::make(vec![], OmlExprImpl::TempName(Self::parse_ids(root_item))),
+            Rule::ids => OmlExpr::TempName(Self::parse_ids(root_item)),
             Rule::expr => Self::parse_expr(root_item),
             _ => unreachable!(),
         }
@@ -202,7 +233,7 @@ impl OmlExpr {
                 _ => unreachable!(),
             }
         }
-        OmlExpr::make(vec![], OmlExprImpl::Array(exprs))
+        OmlExpr::Array(exprs)
     }
 
     fn parse_map_expr(root: pest::iterators::Pair<'_, Rule>) -> OmlExpr {
@@ -210,13 +241,13 @@ impl OmlExpr {
         for root_item in root.into_inner() {
             match root_item.as_rule() {
                 Rule::map_assign_pair => {
-                    let (key, value) = Self::parse_pair(root_item);
+                    let (key, value) = Self::parse_assign_pair(root_item);
                     map.insert(key, value);
                 }
                 _ => unreachable!(),
             }
         }
-        OmlExpr::make(vec![], OmlExprImpl::Map(map))
+        OmlExpr::Map(map)
     }
 
     fn parse_strong_expr(root: pest::iterators::Pair<'_, Rule>) -> OmlExpr {
@@ -279,19 +310,16 @@ impl OmlExpr {
         }
         while !prefix_ops.is_empty() {
             let prefix_op = prefix_ops.remove(prefix_ops.len());
-            expr = OmlExpr::make(vec![], OmlExprImpl::Op1Prefix((prefix_op, Box::new(expr))));
+            expr = OmlExpr::Op1Prefix((prefix_op, Box::new(expr)));
         }
         while !suffix_ops.is_empty() {
-            expr = OmlExpr::make(
-                vec![],
-                match suffix_ops.remove(0) {
-                    SuffixOp::AccessVar(name) => OmlExprImpl::AccessVar((Box::new(expr), name)),
-                    SuffixOp::InvokeFunc((name, args)) => {
-                        OmlExprImpl::InvokeFunc((Box::new(expr), name, args))
-                    }
-                    SuffixOp::Op(suffix_op) => OmlExprImpl::Op1Suffix((Box::new(expr), suffix_op)),
-                },
-            )
+            expr = match suffix_ops.remove(0) {
+                SuffixOp::AccessVar(name) => OmlExpr::AccessVar((Box::new(expr), name)),
+                SuffixOp::InvokeFunc((name, args)) => {
+                    OmlExpr::InvokeFunc((Box::new(expr), name, args))
+                }
+                SuffixOp::Op(suffix_op) => OmlExpr::Op1Suffix((Box::new(expr), suffix_op)),
+            };
         }
         expr
     }
@@ -336,10 +364,7 @@ impl OmlExpr {
                 let left = exprs.remove(idx);
                 let right = exprs.remove(idx);
                 let op = ops.remove(idx).0;
-                let expr = OmlExpr::make(
-                    vec![],
-                    OmlExprImpl::Op2((Box::new(left), op, Box::new(right))),
-                );
+                let expr = OmlExpr::Op2((Box::new(left), op, Box::new(right)));
                 exprs.insert(idx, expr);
             }
         }
@@ -357,24 +382,21 @@ impl OmlExpr {
         let expr1 = Box::new(exprs.remove(0));
         let expr2 = Box::new(exprs.remove(0));
         let expr3 = Box::new(exprs.remove(0));
-        OmlExpr::make(vec![], OmlExprImpl::Op3((expr1, expr2, expr3)))
+        OmlExpr::Op3((expr1, expr2, expr3))
     }
 
     fn parse_literal(root: pest::iterators::Pair<'_, Rule>) -> OmlExpr {
         let root_item = root.into_inner().next().unwrap();
-        OmlExpr::make(
-            vec![],
-            OmlExprImpl::Value(match root_item.as_rule() {
-                Rule::boolean_literal => OmlValue::Bool(root_item.as_str() == "true"),
-                Rule::number_literal => match root_item.as_str().parse::<i64>() {
-                    Ok(n) => OmlValue::Int64(n),
-                    Err(_) => OmlValue::String(root_item.as_str().into_base()),
-                },
-                Rule::string_literal => OmlValue::String(root_item.as_str().into_base()),
-                Rule::format_string_literal => return Self::parse_format_string_literal(root_item),
-                _ => unreachable!(),
-            }),
-        )
+        OmlExpr::Value(match root_item.as_rule() {
+            Rule::boolean_literal => OmlValue::Bool(root_item.as_str() == "true"),
+            Rule::number_literal => match root_item.as_str().parse::<i64>() {
+                Ok(n) => OmlValue::Int64(n),
+                Err(_) => OmlValue::String(root_item.as_str().into_base()),
+            },
+            Rule::string_literal => OmlValue::String(root_item.as_str().into_base()),
+            Rule::format_string_literal => return Self::parse_format_string_literal(root_item),
+            _ => unreachable!(),
+        })
     }
 
     fn parse_format_string_literal(root: pest::iterators::Pair<'_, Rule>) -> OmlExpr {
@@ -383,10 +405,7 @@ impl OmlExpr {
         for root_item in root.into_inner() {
             match root_item.as_rule() {
                 Rule::format_string => {
-                    return OmlExpr::make(
-                        vec![],
-                        OmlExprImpl::Value(OmlValue::String(root_item.as_str().into_base())),
-                    )
+                    return OmlExpr::Value(OmlValue::String(root_item.as_str().into_base()));
                 }
                 Rule::format_string_part1 => strs.push(root_item.as_str().into_base()),
                 Rule::format_string_part2 => strs.push(root_item.as_str().into_base()),
@@ -395,7 +414,7 @@ impl OmlExpr {
                 _ => unreachable!(),
             }
         }
-        OmlExpr::make(vec![], OmlExprImpl::FormatString((strs, exprs)))
+        OmlExpr::FormatString((strs, exprs))
     }
 
     fn parse_ids(root: pest::iterators::Pair<'_, Rule>) -> String {
@@ -427,10 +446,10 @@ impl OmlExpr {
 
     fn evalute2(&self, path: &str, last_result: &OmlValue) -> Result<(OmlValue, bool), String> {
         let mut success = true;
-        let value = match &self.value {
-            OmlExprImpl::None => OmlValue::None,
-            OmlExprImpl::Value(val) => val.clone(),
-            OmlExprImpl::Array(arr) => {
+        let value = match self {
+            OmlExpr::None => OmlValue::None,
+            OmlExpr::Value(val) => val.clone(),
+            OmlExpr::Array(arr) => {
                 let mut ret = vec![];
                 for (index, item) in arr.iter().enumerate() {
                     let (val, tmp_success) = item.evalute2(&path.append_num(index), last_result)?;
@@ -439,7 +458,7 @@ impl OmlExpr {
                 }
                 OmlValue::Array(ret)
             }
-            OmlExprImpl::Map(map) => {
+            OmlExpr::Map(map) => {
                 let mut ret = HashMap::new();
                 for (key, value) in map.iter() {
                     let (val, tmp_success) = value.evalute2(&path.append_str(key), last_result)?;
@@ -448,7 +467,7 @@ impl OmlExpr {
                 }
                 OmlValue::Map(ret)
             }
-            OmlExprImpl::TempName(name) => {
+            OmlExpr::TempName(name) => {
                 match last_result.get(&path.remove_once().append_str(name)) {
                     Some(val) => val.clone(),
                     None => {
@@ -457,7 +476,7 @@ impl OmlExpr {
                     }
                 }
             }
-            OmlExprImpl::Op1Prefix((name, expr)) => {
+            OmlExpr::Op1Prefix((name, expr)) => {
                 let (val, tmp_success) = expr.evalute2(path, last_result)?;
                 success &= tmp_success;
                 if tmp_success {
@@ -466,7 +485,7 @@ impl OmlExpr {
                     OmlValue::None
                 }
             }
-            OmlExprImpl::Op1Suffix((expr, name)) => {
+            OmlExpr::Op1Suffix((expr, name)) => {
                 let (val, tmp_success) = expr.evalute2(path, last_result)?;
                 success &= tmp_success;
                 if tmp_success {
@@ -475,7 +494,7 @@ impl OmlExpr {
                     OmlValue::None
                 }
             }
-            OmlExprImpl::Op2((left, op, right)) => {
+            OmlExpr::Op2((left, op, right)) => {
                 let (left, tmp_success1) = left.evalute2(path, last_result)?;
                 success &= tmp_success1;
                 let (right, tmp_success2) = right.evalute2(path, last_result)?;
@@ -486,7 +505,7 @@ impl OmlExpr {
                     OmlValue::None
                 }
             }
-            OmlExprImpl::Op3((cond, left, right)) => {
+            OmlExpr::Op3((cond, left, right)) => {
                 let (cond, tmp_success) = cond.evalute2(path, last_result)?;
                 if tmp_success {
                     let (value, tmp_success) = match cond.as_bool() {
@@ -500,7 +519,7 @@ impl OmlExpr {
                     OmlValue::None
                 }
             }
-            OmlExprImpl::FormatString((strs, exprs)) => {
+            OmlExpr::FormatString((strs, exprs)) => {
                 let mut exprs1 = vec![];
                 let mut tmp_success = true;
                 for item in exprs.iter() {
@@ -521,8 +540,24 @@ impl OmlExpr {
                     OmlValue::None
                 }
             }
-            OmlExprImpl::AccessVar(_) => todo!(),
-            OmlExprImpl::InvokeFunc(_) => todo!(),
+            OmlExpr::AccessVar(_) => todo!(),
+            OmlExpr::InvokeFunc(_) => todo!(),
+            OmlExpr::IfAnno(if_anno) => {
+                for (cond, value) in if_anno.exprs.iter() {
+                    let (cond_val, tmp_success) = cond.evalute2(path, last_result)?;
+                    if tmp_success {
+                        if cond_val.as_bool().unwrap_or(false) {
+                            return value.evalute2(path, last_result);
+                        }
+                    } else {
+                        success = false;
+                    }
+                }
+                match &if_anno.default {
+                    Some(val) => return val.evalute2(path, last_result),
+                    None => OmlValue::None,
+                }
+            }
         };
         Ok((value, success))
     }
@@ -560,8 +595,8 @@ impl PathAppendExt for str {
 impl Index<usize> for OmlExpr {
     type Output = OmlExpr;
     fn index(&self, index: usize) -> &Self::Output {
-        match &self.value {
-            OmlExprImpl::Array(arr) => arr.get(index).unwrap(),
+        match self {
+            OmlExpr::Array(arr) => arr.get(index).unwrap(),
             _ => panic!(),
         }
     }
@@ -569,8 +604,8 @@ impl Index<usize> for OmlExpr {
 
 impl IndexMut<usize> for OmlExpr {
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-        match &mut self.value {
-            OmlExprImpl::Array(arr) => arr.get_mut(index).unwrap(),
+        match self {
+            OmlExpr::Array(arr) => arr.get_mut(index).unwrap(),
             _ => panic!(),
         }
     }
@@ -579,18 +614,15 @@ impl IndexMut<usize> for OmlExpr {
 impl Index<&str> for OmlExpr {
     type Output = OmlExpr;
     fn index(&self, index: &str) -> &Self::Output {
-        static NULL_EXPR: OmlExpr = OmlExpr {
-            enable_if: Vec::new(),
-            value: OmlExprImpl::Value(OmlValue::None),
-        };
+        static NULL_EXPR: OmlExpr = OmlExpr::None;
         if index == "" {
             return self;
         } else if let Some(p) = index.find('.') {
             let (a, b) = index.split_at(p);
             self.index(a).index(&b[1..])
         } else {
-            match &self.value {
-                OmlExprImpl::Map(map) => map.get(index).unwrap_or(&NULL_EXPR),
+            match self {
+                OmlExpr::Map(map) => map.get(index).unwrap_or(&NULL_EXPR),
                 _ => &NULL_EXPR,
             }
         }
@@ -602,10 +634,10 @@ impl IndexMut<&str> for OmlExpr {
         if index == "" {
             return self;
         } else {
-            if !self.value.is_map() {
-                self.value = OmlExprImpl::Map(HashMap::new());
+            if !self.is_map() {
+                *self = OmlExpr::Map(HashMap::new());
             }
-            if let OmlExprImpl::Map(map) = &mut self.value {
+            if let OmlExpr::Map(map) = self {
                 if map.get(index).is_none() {
                     let val = OmlExpr::new();
                     map.insert(index.to_string(), val.clone());
@@ -620,7 +652,7 @@ impl IndexMut<&str> for OmlExpr {
 
 impl OmlExpr {
     pub fn get_at(&self, index: usize) -> Option<&Self> {
-        if let OmlExprImpl::Array(arr) = &self.value {
+        if let OmlExpr::Array(arr) = self {
             arr.get(index)
         } else {
             None
@@ -628,7 +660,7 @@ impl OmlExpr {
     }
 
     pub fn get_at_mut(&mut self, index: usize) -> Option<&mut Self> {
-        if let OmlExprImpl::Array(arr) = &mut self.value {
+        if let OmlExpr::Array(arr) = self {
             arr.get_mut(index)
         } else {
             None
@@ -636,7 +668,7 @@ impl OmlExpr {
     }
 
     pub fn get(&self, index: &str) -> Option<&Self> {
-        if let OmlExprImpl::Map(map) = &self.value {
+        if let OmlExpr::Map(map) = self {
             map.get(index)
         } else {
             None
@@ -644,7 +676,7 @@ impl OmlExpr {
     }
 
     pub fn get_mut(&mut self, index: &str) -> Option<&mut Self> {
-        if let OmlExprImpl::Map(map) = &mut self.value {
+        if let OmlExpr::Map(map) = self {
             map.get_mut(index)
         } else {
             None
@@ -696,10 +728,10 @@ impl OmlExpr {
     }
 }
 
-impl OmlExprImpl {
+impl OmlExpr {
     pub fn is_map(&self) -> bool {
         match self {
-            OmlExprImpl::Map(_) => true,
+            OmlExpr::Map(_) => true,
             _ => false,
         }
     }
@@ -707,22 +739,22 @@ impl OmlExprImpl {
 
 impl OmlExpr {
     pub fn set_null(&mut self) {
-        self.value = OmlExprImpl::None;
+        *self = OmlExpr::None;
     }
 
     pub fn set_bool(&mut self, val: bool) {
-        self.value = OmlExprImpl::Value(OmlValue::Bool(val));
+        *self = OmlExpr::Value(OmlValue::Bool(val));
     }
 
     pub fn set_int(&mut self, val: i64) {
-        self.value = OmlExprImpl::Value(OmlValue::Int64(val));
+        *self = OmlExpr::Value(OmlValue::Int64(val));
     }
 
     pub fn set_float(&mut self, val: f64) {
-        self.value = OmlExprImpl::Value(OmlValue::Float64(val));
+        *self = OmlExpr::Value(OmlValue::Float64(val));
     }
 
     pub fn set_string(&mut self, val: impl Into<String>) {
-        self.value = OmlExprImpl::Value(OmlValue::String(val.into()));
+        *self = OmlExpr::Value(OmlValue::String(val.into()));
     }
 }
