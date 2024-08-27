@@ -14,7 +14,7 @@ categories = []
 
 [lib]
 name = "oml"
-crate-type = ["staticlib", "lib"]
+crate-type = ["staticlib", "dylib", "lib"]
 
 [dependencies]
 pest = "2.7.11"
