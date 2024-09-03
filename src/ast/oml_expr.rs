@@ -7,6 +7,8 @@ use std::collections::HashMap;
 use std::ops::{Index, IndexMut};
 use std::sync::OnceLock;
 
+static NULL_EXPR: OmlExpr = OmlExpr::None;
+
 fn get_op2_level(op: &str) -> usize {
     static OP2_LEVELS: OnceLock<HashMap<&'static str, usize>> = OnceLock::new();
     *OP2_LEVELS
@@ -432,12 +434,8 @@ impl OmlExpr {
         while count >= 0 {
             count -= 1;
             match self.evalute2("", &last_result) {
-                Ok((result, success)) => {
-                    if success {
-                        return Ok(result);
-                    }
-                    last_result = result;
-                }
+                Ok((result, success)) if success => return Ok(result),
+                Ok((result, _)) => last_result = result,
                 Err(err) => return Err(err),
             }
         }
@@ -595,58 +593,26 @@ impl PathAppendExt for str {
 impl Index<usize> for OmlExpr {
     type Output = OmlExpr;
     fn index(&self, index: usize) -> &Self::Output {
-        match self {
-            OmlExpr::Array(arr) => arr.get(index).unwrap(),
-            _ => panic!(),
-        }
+        self.get_at(index).unwrap_or(&NULL_EXPR)
     }
 }
 
 impl IndexMut<usize> for OmlExpr {
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-        match self {
-            OmlExpr::Array(arr) => arr.get_mut(index).unwrap(),
-            _ => panic!(),
-        }
+        self.get_at_mut(index)
     }
 }
 
 impl Index<&str> for OmlExpr {
     type Output = OmlExpr;
     fn index(&self, index: &str) -> &Self::Output {
-        static NULL_EXPR: OmlExpr = OmlExpr::None;
-        if index == "" {
-            return self;
-        } else if let Some(p) = index.find('.') {
-            let (a, b) = index.split_at(p);
-            self.index(a).index(&b[1..])
-        } else {
-            match self {
-                OmlExpr::Map(map) => map.get(index).unwrap_or(&NULL_EXPR),
-                _ => &NULL_EXPR,
-            }
-        }
+        self.get(index).unwrap_or(&NULL_EXPR)
     }
 }
 
 impl IndexMut<&str> for OmlExpr {
     fn index_mut(&mut self, index: &str) -> &mut Self::Output {
-        if index == "" {
-            return self;
-        } else {
-            if !self.is_map() {
-                *self = OmlExpr::Map(HashMap::new());
-            }
-            if let OmlExpr::Map(map) = self {
-                if map.get(index).is_none() {
-                    let val = OmlExpr::new();
-                    map.insert(index.to_string(), val.clone());
-                }
-                map.get_mut(index).unwrap()
-            } else {
-                panic!()
-            }
-        }
+        self.get_mut(index)
     }
 }
 
@@ -659,57 +625,38 @@ impl OmlExpr {
         }
     }
 
-    pub fn get_at_mut(&mut self, index: usize) -> Option<&mut Self> {
+    pub fn get_at_mut(&mut self, index: usize) -> &mut Self {
         if let OmlExpr::Array(arr) = self {
-            arr.get_mut(index)
+            if (index + 1) > arr.len() {
+                arr.extend(
+                    (arr.len()..(index + 1))
+                        .into_iter()
+                        .map(|_| OmlExpr::new())
+                        .collect::<Vec<_>>(),
+                )
+            }
         } else {
-            None
+            *self = OmlExpr::Array(
+                (0..(index + 1))
+                    .into_iter()
+                    .map(|_| OmlExpr::new())
+                    .collect(),
+            );
+        }
+        if let OmlExpr::Array(arr) = self {
+            arr.get_mut(index).unwrap()
+        } else {
+            panic!()
         }
     }
 
     pub fn get(&self, index: &str) -> Option<&Self> {
-        if let OmlExpr::Map(map) = self {
-            map.get(index)
-        } else {
-            None
-        }
-    }
-
-    pub fn get_mut(&mut self, index: &str) -> Option<&mut Self> {
-        if let OmlExpr::Map(map) = self {
-            map.get_mut(index)
-        } else {
-            None
-        }
-    }
-
-    pub fn get_with_path_mut(&mut self, path: &str) -> Option<&mut Self> {
-        let path_items: Vec<_> = path.split('.').collect();
+        let path_items: Vec<_> = index.split('.').collect();
         let mut obj_ref = self;
         for path_item in path_items.into_iter() {
-            if path_item.starts_with('[') {
-                let num = &path_item[1..path_item.len() - 1];
-                let num: usize = num.parse().unwrap();
-                if let Some(obj) = obj_ref.get_at_mut(num) {
-                    obj_ref = obj;
-                } else {
-                    return None;
-                }
-            }
-            if let Some(obj) = obj_ref.get_mut(path_item) {
-                obj_ref = obj;
-            } else {
-                return None;
-            }
-        }
-        Some(obj_ref)
-    }
-
-    pub fn get_with_path(&self, path: &str) -> Option<&Self> {
-        let path_items: Vec<_> = path.split('.').collect();
-        let mut obj_ref = self;
-        for path_item in path_items.into_iter() {
-            if path_item.starts_with('[') {
+            if path_item.len() == 0 {
+                continue;
+            } else if path_item.starts_with('[') {
                 let num = &path_item[1..path_item.len() - 1];
                 let num: usize = num.parse().unwrap();
                 if let Some(obj) = obj_ref.get_at(num) {
@@ -717,14 +664,44 @@ impl OmlExpr {
                 } else {
                     return None;
                 }
-            }
-            if let Some(obj) = obj_ref.get(path_item) {
-                obj_ref = obj;
             } else {
+                if let OmlExpr::Map(map) = obj_ref {
+                    if let Some(obj) = map.get(path_item) {
+                        obj_ref = obj;
+                        continue;
+                    }
+                }
                 return None;
             }
         }
         Some(obj_ref)
+    }
+
+    pub fn get_mut(&mut self, index: &str) -> &mut Self {
+        let path_items: Vec<_> = index.split('.').collect();
+        let mut obj_ref = self;
+        for path_item in path_items.into_iter() {
+            if path_item.len() == 0 {
+                continue;
+            } else if path_item.starts_with('[') {
+                let num = &path_item[1..path_item.len() - 1];
+                let num: usize = num.parse().unwrap();
+                obj_ref = obj_ref.get_at_mut(num);
+            } else {
+                let map = match obj_ref {
+                    OmlExpr::Map(map) => map,
+                    _ => {
+                        *obj_ref = OmlExpr::Map(HashMap::new());
+                        match obj_ref {
+                            OmlExpr::Map(map) => map,
+                            _ => panic!(),
+                        }
+                    }
+                };
+                obj_ref = map.entry(path_item.to_string()).or_insert(OmlExpr::new());
+            }
+        }
+        obj_ref
     }
 }
 

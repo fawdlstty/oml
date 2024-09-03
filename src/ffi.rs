@@ -42,31 +42,28 @@ pub extern "C" fn oml_expr_from_str(
 pub extern "C" fn oml_expr_set_none(pexpr: *mut c_void, ppath: *const c_char) {
     let mut expr = unsafe { Box::from_raw(pexpr as *mut OmlExpr) };
     let path = unsafe { CStr::from_ptr(ppath).to_str().unwrap_or("") };
-    expr.get_with_path_mut(path).map(|a| *a = OmlExpr::None);
+    expr[path] = OmlExpr::None;
 }
 
 #[no_mangle]
 pub extern "C" fn oml_expr_set_bool(pexpr: *mut c_void, ppath: *const c_char, value: c_int) {
     let mut expr = unsafe { Box::from_raw(pexpr as *mut OmlExpr) };
     let path = unsafe { CStr::from_ptr(ppath).to_str().unwrap_or("") };
-    expr.get_with_path_mut(path)
-        .map(|a| *a = OmlExpr::Value(OmlValue::Bool(value != 0)));
+    expr[path] = OmlExpr::Value(OmlValue::Bool(value != 0));
 }
 
 #[no_mangle]
 pub extern "C" fn oml_expr_set_int(pexpr: *mut c_void, ppath: *const c_char, value: c_longlong) {
     let mut expr = unsafe { Box::from_raw(pexpr as *mut OmlExpr) };
     let path = unsafe { CStr::from_ptr(ppath).to_str().unwrap_or("") };
-    expr.get_with_path_mut(path)
-        .map(|a| *a = OmlExpr::Value(OmlValue::Int64(value)));
+    expr[path] = OmlExpr::Value(OmlValue::Int64(value));
 }
 
 #[no_mangle]
 pub extern "C" fn oml_expr_set_float(pexpr: *mut c_void, ppath: *const c_char, value: c_double) {
     let mut expr = unsafe { Box::from_raw(pexpr as *mut OmlExpr) };
     let path = unsafe { CStr::from_ptr(ppath).to_str().unwrap_or("") };
-    expr.get_with_path_mut(path)
-        .map(|a| *a = OmlExpr::Value(OmlValue::Float64(value)));
+    expr[path] = OmlExpr::Value(OmlValue::Float64(value));
 }
 
 #[no_mangle]
@@ -78,8 +75,7 @@ pub extern "C" fn oml_expr_set_string(
     let mut expr = unsafe { Box::from_raw(pexpr as *mut OmlExpr) };
     let path = unsafe { CStr::from_ptr(ppath).to_str().unwrap_or("") };
     let value = unsafe { CStr::from_ptr(pvalue).to_str().unwrap_or("") }.to_string();
-    expr.get_with_path_mut(path)
-        .map(|a| *a = OmlExpr::Value(OmlValue::String(value)));
+    expr[path] = OmlExpr::Value(OmlValue::String(value));
 }
 
 #[no_mangle]
@@ -91,19 +87,13 @@ pub extern "C" fn oml_expr_evalute(
 ) -> c_int {
     let expr = unsafe { Box::from_raw(pexpr as *mut OmlExpr) };
     let path = unsafe { CStr::from_ptr(ppath).to_str().unwrap_or("") };
-    let ret = match expr.get_with_path(path).map(|a| a.evalute()) {
-        Some(Ok(root)) => {
+    let ret = match expr[path].evalute() {
+        Ok(root) => {
             unsafe { *ppval = Box::leak(Box::new(root)) as *mut OmlValue as *mut c_void };
             unsafe { *pperr = std::ptr::null_mut() };
             true
         }
-        Some(Err(err)) => {
-            unsafe { *ppval = std::ptr::null_mut() };
-            unsafe { *pperr = CString::new(err).unwrap().into_raw() };
-            false
-        }
-        None => {
-            let err = "path not found";
+        Err(err) => {
             unsafe { *ppval = std::ptr::null_mut() };
             unsafe { *pperr = CString::new(err).unwrap().into_raw() };
             false
