@@ -60,8 +60,7 @@ name = $"hello world {value + 12}"
         return 0;
     }
     auto root = std::get<oml::OmlValue>(oroot);
-    auto str = root["hello"]["name"].as_str(); // hello world 42
-    std::cout << str << std::endl;
+    std::cout << root["hello"]["name"].as_str() << std::endl; // hello world 42
     return 0;
 }
 ```
