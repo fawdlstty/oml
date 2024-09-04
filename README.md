@@ -20,9 +20,9 @@ fn main() {
 value = 12
 name = $"hello world {value + 12}"
 "#;
-    let mut root = OmlExpr::from_str(oml_str).unwrap();
-    root["hello"]["value"].set_int(30);
-    let root = root.evalute().unwrap();
+    let mut eroot = OmlExpr::from_str(oml_str).unwrap();
+    eroot["hello"]["value"].set_int(30);
+    let root = eroot.evalute().unwrap();
     println!("{}", root["hello"]["name"].as_str()); // hello world 42
 }
 ```
@@ -34,11 +34,13 @@ name = $"hello world {value + 12}"
 #include <string>
 
 #include "oml/oml.hpp"
+#ifdef _MSC_VER
 #pragma comment(lib, "ws2_32.lib")
 #pragma comment(lib, "ntdll.lib")
 #pragma comment(lib, "bcrypt.lib")
 #pragma comment(lib, "Userenv.lib")
 #pragma comment(lib, "oml.lib")
+#endif
 
 int main() {
 	auto oexpr = oml::OmlExpr::from_str(R"(
@@ -46,21 +48,19 @@ int main() {
 value = 12
 name = $"hello world {value + 12}"
 )");
-	if (oexpr.index() == 1) {
-		auto err = std::get<std::string>(oexpr);
-		std::cout << err << std::endl;
+	if (oeroot.index() == 1) {
+		std::cout << std::get<std::string>(oeroot) << std::endl;
 		return 0;
 	}
-	auto expr = std::get<oml::OmlExpr>(oexpr);
-    expr["hello"]["value"].set_int(30);
-	auto ovalue = expr.evalute();
-	if (ovalue.index() == 1) {
-		auto err = std::get<std::string>(ovalue);
-		std::cout << err << std::endl;
+	auto eroot = std::get<oml::OmlExpr>(oeroot);
+    eroot["hello"]["value"].set_int(30);
+	auto oroot = eroot.evalute();
+	if (oroot.index() == 1) {
+		std::cout << std::get<std::string>(oroot) << std::endl;
 		return 0;
 	}
-	auto value = std::get<oml::OmlValue>(ovalue);
-	auto str = value["hello"]["name"].as_str();
+	auto root = std::get<oml::OmlValue>(oroot);
+	auto str = root["hello"]["name"].as_str(); // hello world 42
 	std::cout << str << std::endl;
 	return 0;
 }
