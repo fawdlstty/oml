@@ -43,25 +43,25 @@ name = $"hello world {value + 12}"
 #endif
 
 int main() {
-	auto oeroot = oml::OmlExpr::from_str(R"(
+    auto oeroot = oml::OmlExpr::from_str(R"(
 [hello]
 value = 12
 name = $"hello world {value + 12}"
 )");
-	if (oeroot.index() == 1) {
-		std::cout << std::get<std::string>(oeroot) << std::endl;
-		return 0;
-	}
-	auto eroot = std::get<oml::OmlExpr>(oeroot);
+    if (oeroot.index() == 1) {
+        std::cout << std::get<std::string>(oeroot) << std::endl;
+        return 0;
+    }
+    auto eroot = std::get<oml::OmlExpr>(oeroot);
     eroot["hello"]["value"].set_int(30);
-	auto oroot = eroot.evalute();
-	if (oroot.index() == 1) {
-		std::cout << std::get<std::string>(oroot) << std::endl;
-		return 0;
-	}
-	auto root = std::get<oml::OmlValue>(oroot);
-	auto str = root["hello"]["name"].as_str(); // hello world 42
-	std::cout << str << std::endl;
-	return 0;
+    auto oroot = eroot.evalute();
+    if (oroot.index() == 1) {
+        std::cout << std::get<std::string>(oroot) << std::endl;
+        return 0;
+    }
+    auto root = std::get<oml::OmlValue>(oroot);
+    auto str = root["hello"]["name"].as_str(); // hello world 42
+    std::cout << str << std::endl;
+    return 0;
 }
 ```
