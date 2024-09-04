@@ -450,7 +450,8 @@ impl OmlExpr {
             OmlExpr::Array(arr) => {
                 let mut ret = vec![];
                 for (index, item) in arr.iter().enumerate() {
-                    let (val, tmp_success) = item.evalute2(&path.append_num(index), last_result)?;
+                    let new_path = path.append_num(index);
+                    let (val, tmp_success) = item.evalute2(&new_path, last_result)?;
                     ret.push(val);
                     success &= tmp_success;
                 }
@@ -459,7 +460,8 @@ impl OmlExpr {
             OmlExpr::Map(map) => {
                 let mut ret = HashMap::new();
                 for (key, value) in map.iter() {
-                    let (val, tmp_success) = value.evalute2(&path.append_str(key), last_result)?;
+                    let new_path = path.append_str(key);
+                    let (val, tmp_success) = value.evalute2(&new_path, last_result)?;
                     ret.insert(key.clone(), val);
                     success &= tmp_success;
                 }
@@ -552,7 +554,9 @@ impl OmlExpr {
                     }
                 }
                 match &if_anno.default {
-                    Some(val) => return val.evalute2(path, last_result),
+                    Some(val) => {
+                        return val.evalute2(path, last_result);
+                    }
                     None => OmlValue::None,
                 }
             }

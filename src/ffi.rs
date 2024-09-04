@@ -43,6 +43,7 @@ pub extern "C" fn oml_expr_set_none(pexpr: *mut c_void, ppath: *const c_char) {
     let mut expr = unsafe { Box::from_raw(pexpr as *mut OmlExpr) };
     let path = unsafe { CStr::from_ptr(ppath).to_str().unwrap_or("") };
     expr[path] = OmlExpr::None;
+    Box::leak(expr);
 }
 
 #[no_mangle]
@@ -50,6 +51,7 @@ pub extern "C" fn oml_expr_set_bool(pexpr: *mut c_void, ppath: *const c_char, va
     let mut expr = unsafe { Box::from_raw(pexpr as *mut OmlExpr) };
     let path = unsafe { CStr::from_ptr(ppath).to_str().unwrap_or("") };
     expr[path] = OmlExpr::Value(OmlValue::Bool(value != 0));
+    Box::leak(expr);
 }
 
 #[no_mangle]
@@ -57,6 +59,7 @@ pub extern "C" fn oml_expr_set_int(pexpr: *mut c_void, ppath: *const c_char, val
     let mut expr = unsafe { Box::from_raw(pexpr as *mut OmlExpr) };
     let path = unsafe { CStr::from_ptr(ppath).to_str().unwrap_or("") };
     expr[path] = OmlExpr::Value(OmlValue::Int64(value));
+    Box::leak(expr);
 }
 
 #[no_mangle]
@@ -64,6 +67,7 @@ pub extern "C" fn oml_expr_set_float(pexpr: *mut c_void, ppath: *const c_char, v
     let mut expr = unsafe { Box::from_raw(pexpr as *mut OmlExpr) };
     let path = unsafe { CStr::from_ptr(ppath).to_str().unwrap_or("") };
     expr[path] = OmlExpr::Value(OmlValue::Float64(value));
+    Box::leak(expr);
 }
 
 #[no_mangle]
@@ -76,6 +80,7 @@ pub extern "C" fn oml_expr_set_string(
     let path = unsafe { CStr::from_ptr(ppath).to_str().unwrap_or("") };
     let value = unsafe { CStr::from_ptr(pvalue).to_str().unwrap_or("") }.to_string();
     expr[path] = OmlExpr::Value(OmlValue::String(value));
+    Box::leak(expr);
 }
 
 #[no_mangle]
@@ -87,7 +92,9 @@ pub extern "C" fn oml_expr_evalute(
 ) -> c_int {
     let expr = unsafe { Box::from_raw(pexpr as *mut OmlExpr) };
     let path = unsafe { CStr::from_ptr(ppath).to_str().unwrap_or("") };
-    let ret = match expr[path].evalute() {
+    let a = &expr[path];
+    let b = a.evalute();
+    let ret = match b {
         Ok(root) => {
             unsafe { *ppval = Box::leak(Box::new(root)) as *mut OmlValue as *mut c_void };
             unsafe { *pperr = std::ptr::null_mut() };
