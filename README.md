@@ -18,16 +18,26 @@ fn main() {
     let oml_str = r#"
 [hello]
 value = 12
-name = $"hello world {value + 12}"
+name = $"hello {value + 12}"
 "#;
     let mut eroot = OmlExpr::from_str(oml_str).unwrap();
     eroot["hello"]["value"].set_int(30);
     let root = eroot.evalute().unwrap();
-    println!("{}", root["hello"]["name"].as_str()); // hello world 42
+    println!("{}", root["hello"]["name"].as_str()); // hello 42
 }
 ```
 
 ### C++
+
+Download and compile static libraries (or dynamic libraries)
+
+```shell
+git clone git@github.com:fawdlstty/oml.git
+cd oml
+cargo build --release --lib # debug: cargo build --lib
+```
+
+The static library (or dynamic library) is generated in the `target/release` directory. Copy it to the C++ project and reference it
 
 ```cpp
 #include <iostream>
@@ -46,7 +56,7 @@ int main() {
     auto oexpr = oml::OmlExpr::from_str(R"(
 [hello]
 value = 12
-name = $"hello world {value + 12}"
+name = $"hello {value + 12}"
 )");
     if (oeroot.index() == 1) {
         std::cout << std::get<std::string>(oeroot) << std::endl;
@@ -60,7 +70,20 @@ name = $"hello world {value + 12}"
         return 0;
     }
     auto root = std::get<oml::OmlValue>(oroot);
-    std::cout << root["hello"]["name"].as_str() << std::endl; // hello world 42
+    std::cout << root["hello"]["name"].as_str() << std::endl; // hello 42
     return 0;
 }
+```
+
+### Other features
+
+The value is available when the conditions are met:
+
+```oml
+[hello]
+
+value = 12
+
+@if value == 12
+name = $"hello {value}"
 ```

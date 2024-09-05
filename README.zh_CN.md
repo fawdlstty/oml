@@ -18,16 +18,26 @@ fn main() {
     let oml_str = r#"
 [hello]
 value = 12
-name = $"hello world {value + 12}"
+name = $"hello {value + 12}"
 "#;
     let mut eroot = OmlExpr::from_str(oml_str).unwrap();
     eroot["hello"]["value"].set_int(30);
     let root = eroot.evalute().unwrap();
-    println!("{}", root["hello"]["name"].as_str()); // hello world 42
+    println!("{}", root["hello"]["name"].as_str()); // hello 42
 }
 ```
 
 ### C++
+
+下载并编译静态库（或动态库）
+
+```shell
+git clone git@github.com:fawdlstty/oml.git
+cd oml
+cargo build --release --lib # debug: cargo build --lib
+```
+
+此时静态库（或动态库）位于 `target/release` 目录下。将其拷贝至C++项目，并引用
 
 ```cpp
 #include <iostream>
@@ -46,7 +56,7 @@ int main() {
     auto oeroot = oml::OmlExpr::from_str(R"(
 [hello]
 value = 12
-name = $"hello world {value + 12}"
+name = $"hello {value + 12}"
 )");
     if (oeroot.index() == 1) {
         std::cout << std::get<std::string>(oeroot) << std::endl;
@@ -60,7 +70,20 @@ name = $"hello world {value + 12}"
         return 0;
     }
     auto root = std::get<oml::OmlValue>(oroot);
-    std::cout << root["hello"]["name"].as_str() << std::endl; // hello world 42
+    std::cout << root["hello"]["name"].as_str() << std::endl; // hello 42
     return 0;
 }
+```
+
+### 其他功能
+
+当满足条件时值可用：
+
+```oml
+[hello]
+
+value = 12
+
+@if value == 12
+name = $"hello {value}"
 ```
