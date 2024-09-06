@@ -75,6 +75,47 @@ name = $"hello {value + 12}"
 }
 ```
 
+### C#
+
+下载并编译动态库
+
+```shell
+git clone git@github.com:fawdlstty/oml.git
+cd oml
+cargo build --release --lib # debug: cargo build --lib
+```
+
+此时动态库位于 `target/release` 目录下。将其拷贝至C#项目编译输出路径，并引用OmlSharp项目
+
+```csharp
+using System;
+using OmlSharp;
+
+namespace test {
+	public class Program {
+		public static void Main () {
+			string src = """
+[hello]
+value = 12
+name = $"hello world {value + 12}"
+""";
+			var oeroot = OmlExpr.from_str (src);
+			if (oeroot.IsOk(out OmlExpr eroot)) {
+				var oroot = eroot.evalute ();
+				if (oroot.IsOk (out OmlValue root)) {
+					Console.WriteLine (root ["hello"] ["name"].as_str());
+				} else if (oroot.IsErr (out string err)) {
+					Console.WriteLine (err);
+				}
+			} else if (oeroot.IsErr (out string err)) {
+				Console.WriteLine (err);
+			}
+			Console.ReadKey ();
+		}
+	}
+}
+```
+
 ### 其他功能
 
 当满足条件时值可用：

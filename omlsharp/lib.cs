@@ -2,7 +2,7 @@
 using System.Runtime.InteropServices;
 using System.Text;
 
-namespace oml;
+namespace OmlSharp;
 
 public static class FFI
 {

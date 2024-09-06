@@ -75,6 +75,47 @@ name = $"hello {value + 12}"
 }
 ```
 
+### C#
+
+Download and compile static libraries (or dynamic libraries)
+
+```shell
+git clone git@github.com:fawdlstty/oml.git
+cd oml
+cargo build --release --lib # debug: cargo build --lib
+```
+
+The dynamic library is generated in the `target/release` directory. Copy it to the C# project target folder and reference OmlSharp
+
+```csharp
+using System;
+using OmlSharp;
+
+namespace test {
+	public class Program {
+		public static void Main () {
+			string src = """
+[hello]
+value = 12
+name = $"hello world {value + 12}"
+""";
+			var oeroot = OmlExpr.from_str (src);
+			if (oeroot.IsOk(out OmlExpr eroot)) {
+				var oroot = eroot.evalute ();
+				if (oroot.IsOk (out OmlValue root)) {
+					Console.WriteLine (root ["hello"] ["name"].as_str());
+				} else if (oroot.IsErr (out string err)) {
+					Console.WriteLine (err);
+				}
+			} else if (oeroot.IsErr (out string err)) {
+				Console.WriteLine (err);
+			}
+			Console.ReadKey ();
+		}
+	}
+}
+```
+
 ### Other features
 
 The value is available when the conditions are met:
