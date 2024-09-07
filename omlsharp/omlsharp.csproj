@@ -16,4 +16,13 @@
     <PackageReference Include="RustyOptions" Version="0.10.1" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Update="libs\oml.x86_64_win.dll">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="libs\liboml.x86_64_linux.so">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>

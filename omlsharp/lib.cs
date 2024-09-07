@@ -2,23 +2,35 @@
 
 namespace OmlSharp;
 
-public class OmlExpr : IDisposable {
+public static class IntPtrExtensions
+{
+    public static string to_str_and_release(this IntPtr ptr)
+    {
+        string str = FFI.PtrToStringUTF8(ptr);
+        FFI.oml_release_str(ptr);
+        return str;
+    }
+}
+
+public class OmlExpr : IDisposable
+{
     public OmlExpr(IntPtr pexpr, string path = "") => (this.pexpr, this.path) = (pexpr, path);
     ~OmlExpr() => do_release();
 
     public OmlExpr this[int index] => new OmlExpr(pexpr, path.Length > 0 ? $"{path}.[{index}]" : $"[{index}]");
     public OmlExpr this[string index] => new OmlExpr(pexpr, path.Length > 0 ? $"{path}.{index}" : index);
 
-
-    public static Result<OmlExpr, string> from_str(string src) {
+    public static Result<OmlExpr, string> from_str(string src)
+    {
         IntPtr pexpr = 0;
         IntPtr perr = 0;
-        if (FFI.oml_expr_from_str(src, out pexpr, out perr) > 0) {
+        if (FFI.oml_expr_from_str(src, out pexpr, out perr) > 0)
+        {
             return Result.Ok<OmlExpr, string>(new OmlExpr(pexpr));
-        } else {
-            string err = FFI.PtrToStringUTF8(perr);
-            FFI.oml_release_str(perr);
-            return Result.Err<OmlExpr, string>(err);
+        }
+        else
+        {
+            return Result.Err<OmlExpr, string>(perr.to_str_and_release());
         }
     }
 
@@ -29,24 +41,28 @@ public class OmlExpr : IDisposable {
     public void set_float(double val) { FFI.oml_expr_set_float(pexpr, path, val); }
     public void set_string(string val) { FFI.oml_expr_set_string(pexpr, path, val); }
 
-    public Result<OmlValue, string> evalute() {
+    public Result<OmlValue, string> evalute()
+    {
         IntPtr pval = 0;
         IntPtr perr = 0;
-        if (FFI.oml_expr_evalute(pexpr, path, out pval, out perr) > 0) {
+        if (FFI.oml_expr_evalute(pexpr, path, out pval, out perr) > 0)
+        {
             return Result.Ok<OmlValue, string>(new OmlValue(pval));
-        } else {
-            string err = FFI.PtrToStringUTF8(perr);
-            FFI.oml_release_str(perr);
-            return Result.Err<OmlValue, string>(err);
+        }
+        else
+        {
+            return Result.Err<OmlValue, string>(perr.to_str_and_release());
         }
     }
 
-    public void Dispose() {
+    public void Dispose()
+    {
         do_release();
         GC.SuppressFinalize(this);
     }
 
-    private void do_release() {
+    private void do_release()
+    {
         if (pexpr == 0) return;
         FFI.oml_release_expr(pexpr);
         pexpr = 0;
@@ -56,7 +72,8 @@ public class OmlExpr : IDisposable {
     private string path = "";
 }
 
-public class OmlValue : IDisposable {
+public class OmlValue : IDisposable
+{
     public OmlValue(IntPtr pval, string path = "") => (this.pval, this.path) = (pval, path);
     ~OmlValue() => do_release();
 
@@ -80,27 +97,23 @@ public class OmlValue : IDisposable {
     public bool as_bool() { return FFI.oml_value_as_bool(pval, path) > 0; }
     public long as_int() { return FFI.oml_value_as_int(pval, path); }
     public double as_float() { return FFI.oml_value_as_float(pval, path); }
-    public string as_str() {
-        IntPtr pstr = FFI.oml_value_as_str(pval, path);
-        string ret = FFI.PtrToStringUTF8(pstr);
-        FFI.oml_release_str(pstr);
-        return ret;
-    }
+    public string as_str() { return FFI.oml_value_as_str(pval, path).to_str_and_release(); }
     public int get_array_length() { return FFI.oml_value_get_array_length(pval, path); }
     public int get_map_length() { return FFI.oml_value_get_map_length(pval, path); }
-    public List<string> get_map_keys() {
-        IntPtr pstr = FFI.oml_value_get_keys(pval, path);
-        string str = FFI.PtrToStringUTF8(pstr);
-        FFI.oml_release_str(pstr);
+    public List<string> get_map_keys()
+    {
+        string str = FFI.oml_value_get_keys(pval, path).to_str_and_release();
         return str.Split('#', StringSplitOptions.RemoveEmptyEntries).ToList() ?? new List<string>();
     }
 
-    public void Dispose() {
+    public void Dispose()
+    {
         do_release();
         GC.SuppressFinalize(this);
     }
 
-    private void do_release() {
+    private void do_release()
+    {
         if (pval == 0) return;
         FFI.oml_release_value(pval);
         pval = 0;
