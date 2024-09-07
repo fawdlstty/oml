@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <PackageId>OmlSharp</PackageId>
+    <PackageId>oml</PackageId>
     <Version>0.0.6</Version>
     <Authors>fawdlstty</Authors>
     <Company>fa-org</Company>
@@ -9,7 +9,7 @@
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <AssemblyName>OmlSharp</AssemblyName>
+    <AssemblyName>oml</AssemblyName>
   </PropertyGroup>
 
   <ItemGroup>

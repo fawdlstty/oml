@@ -2,7 +2,7 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
 
-namespace OmlSharp;
+namespace oml;
 
 public static class FFI
 {
@@ -97,14 +97,22 @@ public static class FFI
     {
         IntPtr DllImportResolver(string libraryName, Assembly assembly, DllImportSearchPath? searchPath)
         {
-            if (libraryName == "oml.dll" && Environment.OSVersion.Platform.ToString().Contains("Win"))
+            if (libraryName == "oml.dll")
             {
-                return NativeLibrary.Load("libs/oml.x86_64_win.dll", assembly, searchPath);
+                if (Environment.Is64BitProcess)
+                {
+                    if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                    {
+                        return NativeLibrary.Load("libs/oml.x86_64_win.dll", assembly, searchPath);
+                    }
+                    else
+                    {
+                        return NativeLibrary.Load("libs/liboml.x86_64_linux.so", assembly, searchPath);
+                    }
+                }
+                throw new Exception("unsupported platform");
             }
-            else
-            {
-                return NativeLibrary.Load("libs/liboml.x86_64_linux.so", assembly, searchPath);
-            }
+            return IntPtr.Zero;
         }
         NativeLibrary.SetDllImportResolver(Assembly.GetExecutingAssembly(), DllImportResolver);
     }

@@ -77,19 +77,8 @@ name = $"hello {value + 12}"
 
 ### C#
 
-Download and compile static libraries (or dynamic libraries)
-
-```shell
-git clone git@github.com:fawdlstty/oml.git
-cd oml
-cargo build --release --lib # debug: cargo build --lib
-```
-
-The dynamic library is generated in the `target/release` directory. Copy it to the C# project target folder and reference OmlSharp
-
 ```csharp
 using System;
-using OmlSharp;
 
 namespace test {
     public class Program {
@@ -99,11 +88,11 @@ namespace test {
 value = 12
 name = $"hello {value + 12}"
 """;
-            var oeroot = OmlExpr.from_str (src);
-            if (oeroot.IsOk(out OmlExpr eroot)) {
+            var oeroot = oml.OmlExpr.from_str (src);
+            if (oeroot.IsOk(out oml.OmlExpr eroot)) {
                 eroot ["hello"] ["value"].set_int (30);
                 var oroot = eroot.evalute ();
-                if (oroot.IsOk (out OmlValue root)) {
+                if (oroot.IsOk (out oml.OmlValue root)) {
                     Console.WriteLine (root ["hello"] ["name"].as_str()); // hello 42
                 } else if (oroot.IsErr (out string err)) {
                     Console.WriteLine (err);

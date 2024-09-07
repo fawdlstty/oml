@@ -1,6 +1,6 @@
 ﻿using RustyOptions;
 
-namespace OmlSharp;
+namespace oml;
 
 public static class IntPtrExtensions
 {

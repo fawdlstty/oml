@@ -77,19 +77,8 @@ name = $"hello {value + 12}"
 
 ### C#
 
-下载并编译动态库
-
-```shell
-git clone git@github.com:fawdlstty/oml.git
-cd oml
-cargo build --release --lib # debug: cargo build --lib
-```
-
-此时动态库位于 `target/release` 目录下。将其拷贝至C#项目编译输出路径，并引用OmlSharp项目
-
 ```csharp
 using System;
-using OmlSharp;
 
 namespace test {
     public class Program {
@@ -99,11 +88,11 @@ namespace test {
 value = 12
 name = $"hello {value + 12}"
 """;
-            var oeroot = OmlExpr.from_str (src);
-            if (oeroot.IsOk(out OmlExpr eroot)) {
+            var oeroot = oml.OmlExpr.from_str (src);
+            if (oeroot.IsOk(out oml.OmlExpr eroot)) {
                 eroot ["hello"] ["value"].set_int (30);
                 var oroot = eroot.evalute ();
-                if (oroot.IsOk (out OmlValue root)) {
+                if (oroot.IsOk (out oml.OmlValue root)) {
                     Console.WriteLine (root ["hello"] ["name"].as_str()); // hello 42
                 } else if (oroot.IsErr (out string err)) {
                     Console.WriteLine (err);
