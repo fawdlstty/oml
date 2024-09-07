@@ -1,6 +1,5 @@
 using System.Reflection;
 using System.Runtime.InteropServices;
-using System.Text;
 
 namespace oml;
 
@@ -105,8 +104,8 @@ public static class FFI
                     {
                         return NativeLibrary.Load("libs/oml.x86_64_win.dll", assembly, searchPath);
                     }
-                    else if (RuntimeInformation.IsOSPlatform (OSPlatform.Linux))
-					{
+                    else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+                    {
                         return NativeLibrary.Load("libs/liboml.x86_64_linux.so", assembly, searchPath);
                     }
                 }
@@ -115,15 +114,5 @@ public static class FFI
             return IntPtr.Zero;
         }
         NativeLibrary.SetDllImportResolver(Assembly.GetExecutingAssembly(), DllImportResolver);
-    }
-
-    public static string PtrToStringUTF8(IntPtr ptr)
-    {
-        if (ptr == IntPtr.Zero) return "";
-        int length = 0;
-        while (Marshal.ReadByte(ptr, length) != 0) length++;
-        byte[] bytes = new byte[length];
-        Marshal.Copy(ptr, bytes, 0, length);
-        return Encoding.UTF8.GetString(bytes);
     }
 }

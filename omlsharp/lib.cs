@@ -1,12 +1,25 @@
-﻿namespace oml;
+﻿using System.Runtime.InteropServices;
+using System.Text;
+
+namespace oml;
 
 public static class IntPtrExtensions
 {
     public static string to_str_and_release(this IntPtr ptr)
     {
-        string str = FFI.PtrToStringUTF8(ptr);
+        string str = PtrToStringUTF8(ptr);
         FFI.oml_release_str(ptr);
         return str;
+    }
+
+    private static string PtrToStringUTF8(IntPtr ptr)
+    {
+        if (ptr == IntPtr.Zero) return "";
+        int length = 0;
+        while (Marshal.ReadByte(ptr, length) != 0) length++;
+        byte[] bytes = new byte[length];
+        Marshal.Copy(ptr, bytes, 0, length);
+        return Encoding.UTF8.GetString(bytes);
     }
 }
 
