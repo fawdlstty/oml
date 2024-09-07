@@ -9,9 +9,4 @@ fn main() {
     };
     _ = cbindgen::generate_with_config(&crate_dir, config)
         .map(|p| p.write_to_file(crate_dir.join("include/oml/oml.h")));
-    // _ = std::fs::remove_file(format!(
-    //     "target/package/{}-{}/Cargo.lock",
-    //     env!("CARGO_PKG_NAME"),
-    //     env!("CARGO_PKG_VERSION")
-    // ));
 }

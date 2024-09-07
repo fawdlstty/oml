@@ -92,27 +92,28 @@ using System;
 using OmlSharp;
 
 namespace test {
-	public class Program {
-		public static void Main () {
-			string src = """
+    public class Program {
+        public static void Main () {
+            string src = """
 [hello]
 value = 12
-name = $"hello world {value + 12}"
+name = $"hello {value + 12}"
 """;
-			var oeroot = OmlExpr.from_str (src);
-			if (oeroot.IsOk(out OmlExpr eroot)) {
-				var oroot = eroot.evalute ();
-				if (oroot.IsOk (out OmlValue root)) {
-					Console.WriteLine (root ["hello"] ["name"].as_str());
-				} else if (oroot.IsErr (out string err)) {
-					Console.WriteLine (err);
-				}
-			} else if (oeroot.IsErr (out string err)) {
-				Console.WriteLine (err);
-			}
-			Console.ReadKey ();
-		}
-	}
+            var oeroot = OmlExpr.from_str (src);
+            if (oeroot.IsOk(out OmlExpr eroot)) {
+                eroot ["hello"] ["value"].set_int (30);
+                var oroot = eroot.evalute ();
+                if (oroot.IsOk (out OmlValue root)) {
+                    Console.WriteLine (root ["hello"] ["name"].as_str()); // hello 42
+                } else if (oroot.IsErr (out string err)) {
+                    Console.WriteLine (err);
+                }
+            } else if (oeroot.IsErr (out string err)) {
+                Console.WriteLine (err);
+            }
+            Console.ReadKey ();
+        }
+    }
 }
 ```
 
