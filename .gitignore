@@ -19,3 +19,4 @@ Cargo.lock
 
 # personal test file
 src/main.rs
+build.bat
