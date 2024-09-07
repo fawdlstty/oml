@@ -77,6 +77,12 @@ name = $"hello {value + 12}"
 
 ### C#
 
+Run command:
+```sh
+dotnet add package oml
+```
+
+Example:
 ```csharp
 using System;
 

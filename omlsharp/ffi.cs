@@ -105,8 +105,8 @@ public static class FFI
                     {
                         return NativeLibrary.Load("libs/oml.x86_64_win.dll", assembly, searchPath);
                     }
-                    else
-                    {
+                    else if (RuntimeInformation.IsOSPlatform (OSPlatform.Linux))
+					{
                         return NativeLibrary.Load("libs/liboml.x86_64_linux.so", assembly, searchPath);
                     }
                 }
