@@ -1,6 +1,4 @@
-﻿using RustyOptions;
-
-namespace oml;
+﻿namespace oml;
 
 public static class IntPtrExtensions
 {
@@ -20,17 +18,17 @@ public class OmlExpr : IDisposable
     public OmlExpr this[int index] => new OmlExpr(pexpr, path.Length > 0 ? $"{path}.[{index}]" : $"[{index}]");
     public OmlExpr this[string index] => new OmlExpr(pexpr, path.Length > 0 ? $"{path}.{index}" : index);
 
-    public static Result<OmlExpr, string> from_str(string src)
+    public static OmlExpr from_str(string src)
     {
         IntPtr pexpr = 0;
         IntPtr perr = 0;
         if (FFI.oml_expr_from_str(src, out pexpr, out perr) > 0)
         {
-            return Result.Ok<OmlExpr, string>(new OmlExpr(pexpr));
+            return new OmlExpr(pexpr);
         }
         else
         {
-            return Result.Err<OmlExpr, string>(perr.to_str_and_release());
+            throw new Exception(perr.to_str_and_release());
         }
     }
 
@@ -41,17 +39,17 @@ public class OmlExpr : IDisposable
     public void set_float(double val) { FFI.oml_expr_set_float(pexpr, path, val); }
     public void set_string(string val) { FFI.oml_expr_set_string(pexpr, path, val); }
 
-    public Result<OmlValue, string> evalute()
+    public OmlValue evalute()
     {
         IntPtr pval = 0;
         IntPtr perr = 0;
         if (FFI.oml_expr_evalute(pexpr, path, out pval, out perr) > 0)
         {
-            return Result.Ok<OmlValue, string>(new OmlValue(pval));
+            return new OmlValue(pval);
         }
         else
         {
-            return Result.Err<OmlValue, string>(perr.to_str_and_release());
+            throw new Exception(perr.to_str_and_release());
         }
     }
 

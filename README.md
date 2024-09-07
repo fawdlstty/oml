@@ -94,18 +94,10 @@ namespace test {
 value = 12
 name = $"hello {value + 12}"
 """;
-            var oeroot = oml.OmlExpr.from_str (src);
-            if (oeroot.IsOk(out oml.OmlExpr eroot)) {
-                eroot ["hello"] ["value"].set_int (30);
-                var oroot = eroot.evalute ();
-                if (oroot.IsOk (out oml.OmlValue root)) {
-                    Console.WriteLine (root ["hello"] ["name"].as_str()); // hello 42
-                } else if (oroot.IsErr (out string err)) {
-                    Console.WriteLine (err);
-                }
-            } else if (oeroot.IsErr (out string err)) {
-                Console.WriteLine (err);
-            }
+            var eroot = oml.OmlExpr.from_str (src);
+            eroot ["hello"] ["value"].set_int (30);
+            var root = eroot.evalute ();
+            Console.WriteLine (root ["hello"] ["name"].as_str()); // hello 42
             Console.ReadKey ();
         }
     }
