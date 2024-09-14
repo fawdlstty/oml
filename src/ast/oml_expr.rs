@@ -3,6 +3,7 @@ use super::oml_value::OmlValue;
 use crate::string_utils::IntoBaseExt;
 use pest::Parser;
 use pest_derive::Parser;
+use std::cell::UnsafeCell;
 use std::collections::HashMap;
 use std::ops::{Index, IndexMut};
 use std::sync::OnceLock;
@@ -97,7 +98,7 @@ impl OmlExpr {
             }
             OmlExpr::Map(map) => {
                 if let OmlExpr::Map(map2) = val {
-                    for (key, mut val) in map2.into_iter() {
+                    for (key, val) in map2.into_iter() {
                         if let Some(self_k) = map.get_mut(&key) {
                             self_k.apply(val);
                         } else {
@@ -428,15 +429,101 @@ impl OmlExpr {
         }
     }
 
+    pub fn root_evalute(&self, path: &str) -> Result<OmlValue, String> {
+        self[path].evalute_cb(path, &|path| self.root_evalute(path))
+    }
+
+    pub fn evalute_cb(
+        &self,
+        path: &str,
+        calc_cb: &impl Fn(&str) -> Result<OmlValue, String>,
+    ) -> Result<OmlValue, String> {
+        Ok(match self {
+            OmlExpr::None => OmlValue::None,
+            OmlExpr::Value(val) => val.clone(),
+            OmlExpr::Array(arr) => {
+                let mut ret = vec![];
+                for (index, item) in arr.iter().enumerate() {
+                    let val = item.evalute_cb(&path.append_num(index), calc_cb)?;
+                    ret.push(val);
+                }
+                OmlValue::Array(ret)
+            }
+            OmlExpr::Map(map) => {
+                let mut ret = HashMap::new();
+                for (key, item) in map.iter() {
+                    let val = item.evalute_cb(&path.append_str(key), calc_cb)?;
+                    ret.insert(key.clone(), val);
+                }
+                OmlValue::Map(ret)
+            }
+            OmlExpr::TempName(name) => calc_cb(&path.remove_once().append_str(name))?,
+            OmlExpr::Op1Prefix((name, expr)) => {
+                let val = expr.evalute_cb(path, calc_cb)?;
+                Op1Evaluator::eval_prefix(name, val)?
+            }
+            OmlExpr::Op1Suffix((expr, name)) => {
+                let val = expr.evalute_cb(path, calc_cb)?;
+                Op1Evaluator::eval_suffix(name, val)?
+            }
+            OmlExpr::Op2((left, op, right)) => {
+                let left = left.evalute_cb(path, calc_cb)?;
+                let right = right.evalute_cb(path, calc_cb)?;
+                Op2Evaluator::eval(left, op, right)?
+            }
+            OmlExpr::Op3((cond, left, right)) => {
+                let cond = cond.evalute_cb(path, calc_cb)?;
+                let val = match cond.as_bool() {
+                    Some(true) => left,
+                    Some(false) => right,
+                    None => return Err("condition is not bool".to_string()),
+                };
+                val.evalute_cb(path, calc_cb)?
+            }
+            OmlExpr::FormatString((strs, exprs)) => {
+                let mut exprs1 = vec![];
+                for item in exprs.iter() {
+                    let val = item.evalute_cb(path, calc_cb)?;
+                    exprs1.push(val);
+                }
+                exprs1.push(OmlValue::String("".to_string()));
+                let mut ret = "".to_string();
+                for (a, b) in strs.iter().zip(exprs1.iter()) {
+                    ret.push_str(a);
+                    ret.push_str(&b.as_str());
+                }
+                OmlValue::String(ret)
+            }
+            OmlExpr::AccessVar(_) => todo!(),
+            OmlExpr::InvokeFunc(_) => todo!(),
+            OmlExpr::IfAnno(if_anno) => {
+                let mut ret = None;
+                for (cond, value) in if_anno.exprs.iter() {
+                    let val = cond.evalute_cb(path, calc_cb)?;
+                    match val.as_bool().unwrap_or(false) {
+                        true => {
+                            ret = value.evalute_cb(path, calc_cb).ok();
+                            break;
+                        }
+                        false => return Err("condition is not bool".to_string()),
+                    }
+                }
+                ret.unwrap_or(match &if_anno.default {
+                    Some(val) => val.evalute_cb(path, calc_cb)?,
+                    None => OmlValue::None,
+                })
+            }
+        })
+    }
+
     pub fn evalute(&self) -> Result<OmlValue, String> {
         let mut last_result = OmlValue::None;
         let mut count = 3;
         while count >= 0 {
             count -= 1;
-            match self.evalute2("", &last_result) {
-                Ok((result, success)) if success => return Ok(result),
-                Ok((result, _)) => last_result = result,
-                Err(err) => return Err(err),
+            match self.evalute2("", &last_result)? {
+                (result, true) => return Ok(result),
+                (result, false) => last_result = result,
             }
         }
         Err("evalute failed.".to_string())
@@ -573,9 +660,13 @@ pub(crate) trait PathAppendExt {
 
 impl PathAppendExt for str {
     fn append_str(&self, name: &str) -> String {
-        match self.is_empty() {
-            true => name.to_string(),
-            false => format!("{}.{}", self, name),
+        match name {
+            "root" => "".to_string(),
+            "super" => self.remove_once().to_string(),
+            _ => match self.is_empty() {
+                true => name.to_string(),
+                false => format!("{}.{}", self, name),
+            },
         }
     }
 
@@ -716,9 +807,7 @@ impl OmlExpr {
             _ => false,
         }
     }
-}
 
-impl OmlExpr {
     pub fn set_null(&mut self) {
         *self = OmlExpr::None;
     }
@@ -737,5 +826,70 @@ impl OmlExpr {
 
     pub fn set_string(&mut self, val: impl Into<String>) {
         *self = OmlExpr::Value(OmlValue::String(val.into()));
+    }
+
+    pub fn wrap(&self) -> OmlExprWrap {
+        OmlExprWrap {
+            expr: self,
+            path: UnsafeCell::new("".to_string()),
+        }
+    }
+}
+
+pub struct OmlExprWrap<'a> {
+    expr: &'a OmlExpr,
+    path: UnsafeCell<String>,
+}
+
+impl<'a> Index<usize> for OmlExprWrap<'a> {
+    type Output = OmlExprWrap<'a>;
+    fn index(&self, index: usize) -> &Self::Output {
+        let path = unsafe { &mut *self.path.get() };
+        *path = match path.len() {
+            0 => format!("[{}]", index),
+            _ => format!("{}.[{}]", path, index),
+        };
+        self
+    }
+}
+
+impl<'a> IndexMut<usize> for OmlExprWrap<'a> {
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        let path = self.path.get_mut();
+        *path = match path.len() {
+            0 => format!("[{}]", index),
+            _ => format!("{}.[{}]", path, index),
+        };
+        self
+    }
+}
+
+impl<'a> Index<&str> for OmlExprWrap<'a> {
+    type Output = OmlExprWrap<'a>;
+    fn index(&self, index: &str) -> &Self::Output {
+        let path = unsafe { &mut *self.path.get() };
+        *path = match path.len() {
+            0 => index.to_string(),
+            _ => format!("{}.{}", path, index),
+        };
+        self
+    }
+}
+
+impl<'a> IndexMut<&str> for OmlExprWrap<'a> {
+    fn index_mut(&mut self, index: &str) -> &mut Self::Output {
+        let path = self.path.get_mut();
+        *path = match path.len() {
+            0 => index.to_string(),
+            _ => format!("{}.{}", path, index),
+        };
+        self
+    }
+}
+
+impl<'a> OmlExprWrap<'a> {
+    pub fn evalute(&self) -> Result<OmlValue, String> {
+        let path = unsafe { &*self.path.get() }.clone();
+        self.expr.root_evalute(&path[..])
     }
 }
